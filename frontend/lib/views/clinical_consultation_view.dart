@@ -56,10 +56,131 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     super.dispose();
   }
 
+  /// Sanitizes text input to prevent SQLite encoding issues or string truncations caused by NUL characters.
+  String? _sanitizeInput(String? text) {
+    if (text == null) return null;
+    final cleaned = text.replaceAll('\x00', '').trim();
+    return cleaned.isEmpty ? null : cleaned;
+  }
+
+  // --- Vitals Validations ---
+  String? _validateBp(String? val) {
+    if (val == null || val.trim().isEmpty) return null;
+    final v = val.trim();
+    if (v.length > 20) return 'Max 20 chars';
+    final bpRegex = RegExp(r'^\d{2,3}\s*\/\s*\d{2,3}(\s*mmHg)?$', caseSensitive: false);
+    if (!bpRegex.hasMatch(v)) {
+      return 'e.g. 120/80';
+    }
+    return null;
+  }
+
+  String? _validatePulse(String? val) {
+    if (val == null || val.trim().isEmpty) return null;
+    final v = val.trim();
+    if (v.length > 20) return 'Max 20 chars';
+    final pulseRegex = RegExp(r'^\d{2,3}(\s*bpm)?$', caseSensitive: false);
+    if (!pulseRegex.hasMatch(v)) {
+      return 'e.g. 72 or 72 bpm';
+    }
+    final match = RegExp(r'\d+').stringMatch(v);
+    if (match != null) {
+      final p = int.tryParse(match);
+      if (p != null && (p < 20 || p > 300)) {
+        return 'Range: 20-300';
+      }
+    }
+    return null;
+  }
+
+  String? _validateTemp(String? val) {
+    if (val == null || val.trim().isEmpty) return null;
+    final v = val.trim();
+    if (v.length > 20) return 'Max 20 chars';
+    final tempRegex = RegExp(r'^\d{2,3}(\.\d{1,2})?(\s*°?[FC])?$', caseSensitive: false);
+    if (!tempRegex.hasMatch(v)) {
+      return 'e.g. 98.6 or 37.0';
+    }
+    final match = RegExp(r'\d+(\.\d+)?').stringMatch(v);
+    if (match != null) {
+      final t = double.tryParse(match);
+      if (t != null && (t < 20 || t > 115)) {
+        return 'Invalid range';
+      }
+    }
+    return null;
+  }
+
+  String? _validateSaturation(String? val) {
+    if (val == null || val.trim().isEmpty) return null;
+    final v = val.trim();
+    if (v.length > 20) return 'Max 20 chars';
+    final satRegex = RegExp(r'^\d{2,3}(\s*%)?$', caseSensitive: false);
+    if (!satRegex.hasMatch(v)) {
+      return 'e.g. 98 or 98%';
+    }
+    final match = RegExp(r'\d+').stringMatch(v);
+    if (match != null) {
+      final s = int.tryParse(match);
+      if (s != null && (s < 30 || s > 100)) {
+        return 'Range: 30-100%';
+      }
+    }
+    return null;
+  }
+
+  String? _validateFreeText(String? val, {int maxLength = 2500}) {
+    if (val == null || val.trim().isEmpty) return null;
+    if (val.length > maxLength) {
+      return 'Exceeds max limit of $maxLength characters';
+    }
+    return null;
+  }
+
   Future<void> _saveConsultation() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill out required fields in the consultation form.')),
+        const SnackBar(
+          content: Text('Please correct the errors in the consultation form before saving.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final chief = _sanitizeInput(_chiefComplaintController.text);
+    final history = _sanitizeInput(_historyController.text);
+    final past = _sanitizeInput(_pastHistoryController.text);
+    final sysExam = _sanitizeInput(_systemicExamController.text);
+    final inv = _sanitizeInput(_investigationsController.text);
+    final diag = _sanitizeInput(_diagnosisController.text);
+    final advice = _sanitizeInput(_adviceController.text);
+    final referral = _sanitizeInput(_referralToController.text);
+
+    final vitalsBp = _sanitizeInput(_vitalsBpController.text);
+    final vitalsPulse = _sanitizeInput(_vitalsPulseController.text);
+    final vitalsTemp = _sanitizeInput(_vitalsTempController.text);
+    final vitalsSat = _sanitizeInput(_vitalsSaturationController.text);
+    final followup = _sanitizeInput(_followupDateController.text);
+
+    // Require at least one clinical detail or vital sign
+    if (chief == null &&
+        history == null &&
+        past == null &&
+        sysExam == null &&
+        inv == null &&
+        diag == null &&
+        advice == null &&
+        referral == null &&
+        vitalsBp == null &&
+        vitalsPulse == null &&
+        vitalsTemp == null &&
+        vitalsSat == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter at least one clinical detail or vital sign.'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -67,6 +188,10 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     setState(() => _isSaving = true);
 
     try {
+      if (widget.patient.id == null || widget.patient.id! <= 0) {
+        throw Exception('Invalid patient identifier.');
+      }
+
       final existingVisits = await DatabaseHelper.instance.getVisitsForPatient(widget.patient.id!);
       final nextVisitNumber = existingVisits.length + 1;
       final visitUuid = 'vst-${DateTime.now().millisecondsSinceEpoch}';
@@ -74,29 +199,35 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       final visit = PatientVisit(
         visitUuid: visitUuid,
         patientId: widget.patient.id!,
-        doctorId: widget.currentUser.id,
+        doctorId: (widget.currentUser.id != null && widget.currentUser.id! > 0) ? widget.currentUser.id : null,
         visitNumber: nextVisitNumber,
-        chiefComplaint: _chiefComplaintController.text.trim().isEmpty ? null : _chiefComplaintController.text.trim(),
-        history: _historyController.text.trim().isEmpty ? null : _historyController.text.trim(),
-        pastMedicalHistory: _pastHistoryController.text.trim().isEmpty ? null : _pastHistoryController.text.trim(),
-        vitalsBp: _vitalsBpController.text.trim().isEmpty ? null : _vitalsBpController.text.trim(),
-        vitalsPulse: _vitalsPulseController.text.trim().isEmpty ? null : _vitalsPulseController.text.trim(),
-        vitalsTemp: _vitalsTempController.text.trim().isEmpty ? null : _vitalsTempController.text.trim(),
-        vitalsSaturation: _vitalsSaturationController.text.trim().isEmpty ? null : _vitalsSaturationController.text.trim(),
-        systemicExamination: _systemicExamController.text.trim().isEmpty ? null : _systemicExamController.text.trim(),
-        investigations: _investigationsController.text.trim().isEmpty ? null : _investigationsController.text.trim(),
-        diagnosis: _diagnosisController.text.trim().isEmpty ? null : _diagnosisController.text.trim(),
-        advice: _adviceController.text.trim().isEmpty ? null : _adviceController.text.trim(),
-        referralTo: _referralToController.text.trim().isEmpty ? null : _referralToController.text.trim(),
-        followupDate: _followupDateController.text.trim().isEmpty ? null : _followupDateController.text.trim(),
+        chiefComplaint: chief,
+        history: history,
+        pastMedicalHistory: past,
+        vitalsBp: vitalsBp,
+        vitalsPulse: vitalsPulse,
+        vitalsTemp: vitalsTemp,
+        vitalsSaturation: vitalsSat,
+        systemicExamination: sysExam,
+        investigations: inv,
+        diagnosis: diag,
+        advice: advice,
+        referralTo: referral,
+        followupDate: followup,
         syncStatus: 'pending',
       );
 
-      await DatabaseHelper.instance.insertPatientVisit(visit);
+      final insertedId = await DatabaseHelper.instance.insertPatientVisit(visit);
+      if (insertedId <= 0) {
+        throw Exception('Failed to insert consultation into database.');
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Clinical Consultation Visit #$nextVisitNumber saved successfully!')),
+          SnackBar(
+            content: Text('Clinical Consultation Visit #$nextVisitNumber saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pop(context);
       }
@@ -135,11 +266,14 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     required TextEditingController controller,
     required String hintText,
     int maxLines = 3,
+    int maxLength = 2500,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
+      maxLength: maxLength,
+      buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
       decoration: InputDecoration(
         hintText: hintText,
         alignLabelWithHint: true,
@@ -150,7 +284,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         filled: true,
         fillColor: Colors.grey.shade50,
       ),
-      validator: validator,
+      validator: validator ?? (v) => _validateFreeText(v, maxLength: maxLength),
     );
   }
 
@@ -184,8 +318,8 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Center(
-            child: Container(
-              maxWidth: 900,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
               child: Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -229,10 +363,12 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       // d. Vitals signs (BP, Pulse, Temp. Saturation) entry separated.
                       _buildSectionHeader('d. Vital signs', Icons.monitor_heart),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: TextFormField(
                               controller: _vitalsBpController,
+                              validator: _validateBp,
                               decoration: const InputDecoration(
                                 labelText: 'BP (e.g. 120/80 mmHg)',
                                 border: OutlineInputBorder(),
@@ -243,6 +379,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                           Expanded(
                             child: TextFormField(
                               controller: _vitalsPulseController,
+                              validator: _validatePulse,
                               decoration: const InputDecoration(
                                 labelText: 'Pulse (e.g. 72 bpm)',
                                 border: OutlineInputBorder(),
@@ -253,6 +390,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                           Expanded(
                             child: TextFormField(
                               controller: _vitalsTempController,
+                              validator: _validateTemp,
                               decoration: const InputDecoration(
                                 labelText: 'Temp (e.g. 98.6 °F)',
                                 border: OutlineInputBorder(),
@@ -263,6 +401,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                           Expanded(
                             child: TextFormField(
                               controller: _vitalsSaturationController,
+                              validator: _validateSaturation,
                               decoration: const InputDecoration(
                                 labelText: 'Saturation (e.g. 98%)',
                                 border: OutlineInputBorder(),

@@ -32,7 +32,263 @@ class DatabaseHelper {
         await db.execute('PRAGMA foreign_keys = ON;');
       },
       onCreate: _createDB,
+      onOpen: _migrateSchema,
     );
+  }
+
+  Future<void> _migrateSchema(Database db) async {
+    try {
+      final rolesInfo = await db.rawQuery("PRAGMA table_info('roles')");
+      final rolesCols = rolesInfo.map((c) => c['name'] as String).toSet();
+      if (!rolesCols.contains('role_name')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "role_name" TEXT;');
+      }
+      if (!rolesCols.contains('description')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "description" TEXT;');
+      }
+      if (!rolesCols.contains('permissions')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "permissions" TEXT;');
+      }
+      if (!rolesCols.contains('created_at')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "created_at" TEXT;');
+      }
+      final usersInfo = await db.rawQuery("PRAGMA table_info('users')");
+      final usersCols = usersInfo.map((c) => c['name'] as String).toSet();
+      if (!usersCols.contains('user_uuid')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "user_uuid" TEXT;');
+      }
+      if (!usersCols.contains('username')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "username" TEXT;');
+      }
+      if (!usersCols.contains('password_hash')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "password_hash" TEXT;');
+      }
+      if (!usersCols.contains('full_name')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "full_name" TEXT;');
+      }
+      if (!usersCols.contains('specialization')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "specialization" TEXT;');
+      }
+      if (!usersCols.contains('license_number')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "license_number" TEXT;');
+      }
+      if (!usersCols.contains('phone')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "phone" TEXT;');
+      }
+      if (!usersCols.contains('email')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "email" TEXT;');
+      }
+      if (!usersCols.contains('role')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "role" TEXT;');
+      }
+      if (!usersCols.contains('is_active')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "is_active" INTEGER;');
+      }
+      if (!usersCols.contains('created_at')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "created_at" TEXT;');
+      }
+      final patientsInfo = await db.rawQuery("PRAGMA table_info('patients')");
+      final patientsCols = patientsInfo.map((c) => c['name'] as String).toSet();
+      if (!patientsCols.contains('patient_uuid')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "patient_uuid" TEXT;');
+      }
+      if (!patientsCols.contains('patient_code')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "patient_code" TEXT;');
+      }
+      if (!patientsCols.contains('full_name')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "full_name" TEXT;');
+      }
+      if (!patientsCols.contains('date_of_birth')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "date_of_birth" TEXT;');
+      }
+      if (!patientsCols.contains('age')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "age" INTEGER;');
+      }
+      if (!patientsCols.contains('gender')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "gender" TEXT;');
+      }
+      if (!patientsCols.contains('occupation')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "occupation" TEXT;');
+      }
+      if (!patientsCols.contains('mobile_number')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "mobile_number" TEXT;');
+      }
+      if (!patientsCols.contains('address')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "address" TEXT;');
+      }
+      if (!patientsCols.contains('email')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "email" TEXT;');
+      }
+      if (!patientsCols.contains('emergency_contact')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "emergency_contact" TEXT;');
+      }
+      if (!patientsCols.contains('referral_doctor')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "referral_doctor" TEXT;');
+      }
+      if (!patientsCols.contains('registration_date')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "registration_date" TEXT;');
+      }
+      if (!patientsCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!patientsCols.contains('updated_at')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "updated_at" TEXT;');
+      }
+      final patientVisitsInfo = await db.rawQuery("PRAGMA table_info('patient_visits')");
+      final patientVisitsCols = patientVisitsInfo.map((c) => c['name'] as String).toSet();
+      if (!patientVisitsCols.contains('visit_uuid')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "visit_uuid" TEXT;');
+      }
+      if (!patientVisitsCols.contains('patient_id')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "patient_id" INTEGER;');
+      }
+      if (!patientVisitsCols.contains('doctor_id')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "doctor_id" INTEGER;');
+      }
+      if (!patientVisitsCols.contains('visit_date')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "visit_date" TEXT;');
+      }
+      if (!patientVisitsCols.contains('visit_number')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "visit_number" INTEGER;');
+      }
+      if (!patientVisitsCols.contains('chief_complaint')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "chief_complaint" TEXT;');
+      }
+      if (!patientVisitsCols.contains('history')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "history" TEXT;');
+      }
+      if (!patientVisitsCols.contains('past_medical_history')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "past_medical_history" TEXT;');
+      }
+      if (!patientVisitsCols.contains('vitals_bp')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "vitals_bp" TEXT;');
+      }
+      if (!patientVisitsCols.contains('vitals_pulse')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "vitals_pulse" TEXT;');
+      }
+      if (!patientVisitsCols.contains('vitals_temp')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "vitals_temp" TEXT;');
+      }
+      if (!patientVisitsCols.contains('vitals_saturation')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "vitals_saturation" TEXT;');
+      }
+      if (!patientVisitsCols.contains('systemic_examination')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "systemic_examination" TEXT;');
+      }
+      if (!patientVisitsCols.contains('investigations')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "investigations" TEXT;');
+      }
+      if (!patientVisitsCols.contains('diagnosis')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "diagnosis" TEXT;');
+      }
+      if (!patientVisitsCols.contains('advice')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "advice" TEXT;');
+      }
+      if (!patientVisitsCols.contains('referral_to')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "referral_to" TEXT;');
+      }
+      if (!patientVisitsCols.contains('followup_date')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "followup_date" TEXT;');
+      }
+      if (!patientVisitsCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!patientVisitsCols.contains('created_at')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "created_at" TEXT;');
+      }
+      final billsInfo = await db.rawQuery("PRAGMA table_info('bills')");
+      final billsCols = billsInfo.map((c) => c['name'] as String).toSet();
+      if (!billsCols.contains('bill_number')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "bill_number" TEXT;');
+      }
+      if (!billsCols.contains('visit_id')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "visit_id" INTEGER;');
+      }
+      if (!billsCols.contains('patient_id')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "patient_id" INTEGER;');
+      }
+      if (!billsCols.contains('consultation_charges')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "consultation_charges" REAL;');
+      }
+      if (!billsCols.contains('procedure_charges')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "procedure_charges" REAL;');
+      }
+      if (!billsCols.contains('additional_charges')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "additional_charges" REAL;');
+      }
+      if (!billsCols.contains('discount_amount')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "discount_amount" REAL;');
+      }
+      if (!billsCols.contains('total_amount')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "total_amount" REAL;');
+      }
+      if (!billsCols.contains('paid_amount')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "paid_amount" REAL;');
+      }
+      if (!billsCols.contains('payment_status')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "payment_status" TEXT;');
+      }
+      if (!billsCols.contains('payment_method')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "payment_method" TEXT;');
+      }
+      if (!billsCols.contains('bill_date')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "bill_date" TEXT;');
+      }
+      if (!billsCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "sync_status" TEXT;');
+      }
+      final billItemsInfo = await db.rawQuery("PRAGMA table_info('bill_items')");
+      final billItemsCols = billItemsInfo.map((c) => c['name'] as String).toSet();
+      if (!billItemsCols.contains('bill_id')) {
+        await db.execute('ALTER TABLE "bill_items" ADD COLUMN "bill_id" INTEGER;');
+      }
+      if (!billItemsCols.contains('item_description')) {
+        await db.execute('ALTER TABLE "bill_items" ADD COLUMN "item_description" TEXT;');
+      }
+      if (!billItemsCols.contains('amount')) {
+        await db.execute('ALTER TABLE "bill_items" ADD COLUMN "amount" REAL;');
+      }
+      final auditLogsInfo = await db.rawQuery("PRAGMA table_info('audit_logs')");
+      final auditLogsCols = auditLogsInfo.map((c) => c['name'] as String).toSet();
+      if (!auditLogsCols.contains('user_id')) {
+        await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "user_id" INTEGER;');
+      }
+      if (!auditLogsCols.contains('action')) {
+        await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "action" TEXT;');
+      }
+      if (!auditLogsCols.contains('details')) {
+        await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "details" TEXT;');
+      }
+      if (!auditLogsCols.contains('timestamp')) {
+        await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "timestamp" TEXT;');
+      }
+      if (!auditLogsCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "sync_status" TEXT;');
+      }
+      final syncQueueInfo = await db.rawQuery("PRAGMA table_info('sync_queue')");
+      final syncQueueCols = syncQueueInfo.map((c) => c['name'] as String).toSet();
+      if (!syncQueueCols.contains('table_name')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "table_name" TEXT;');
+      }
+      if (!syncQueueCols.contains('record_id')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "record_id" INTEGER;');
+      }
+      if (!syncQueueCols.contains('operation')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "operation" TEXT;');
+      }
+      if (!syncQueueCols.contains('status')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "status" TEXT;');
+      }
+      if (!syncQueueCols.contains('last_attempt')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "last_attempt" TEXT;');
+      }
+      if (!syncQueueCols.contains('error_message')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "error_message" TEXT;');
+      }
+      if (!syncQueueCols.contains('created_at')) {
+        await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "created_at" TEXT;');
+      }
+    } catch (_) {}
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -164,6 +420,8 @@ class DatabaseHelper {
   Future<void> _seedInitialData(Database db) async {
     await db.execute('''INSERT OR IGNORE INTO "roles" ("role_name", "description", "permissions") VALUES ('Admin', 'System Administrator with full access', 'all');''');
     await db.execute('''INSERT OR IGNORE INTO "roles" ("role_name", "description", "permissions") VALUES ('Doctor', 'Doctor / Physician with clinical access', 'clinical,patients,prescriptions,billing');''');
+    await db.execute('''INSERT OR IGNORE INTO "users" ("user_uuid", "username", "password_hash", "full_name", "specialization", "license_number", "phone", "email", "role", "is_active") VALUES ('usr-admin-default', 'admin', 'admin', 'System Administrator', 'Administration', 'ADMIN-001', '1234567890', 'admin@clinic.com', 'Admin', 1);''');
+    await db.execute('''INSERT OR IGNORE INTO "users" ("user_uuid", "username", "password_hash", "full_name", "specialization", "license_number", "phone", "email", "role", "is_active") VALUES ('usr-doctor-default', 'doctor', 'doctor', 'Dr. John Doe', 'General Medicine', 'MED-1001', '0987654321', 'doctor@clinic.com', 'Doctor', 1);''');
   }
 
   // === Role CRUD Operations ===
@@ -294,10 +552,6 @@ class DatabaseHelper {
     return await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
   }
 
-
-
-
-
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
     final db = await instance.database;
@@ -427,7 +681,6 @@ class DatabaseHelper {
   }
 
   // === Custom EMR Specialized Queries ===
-
   Future<List<Patient>> searchPatients(String query) async {
     final db = await instance.database;
     if (query.trim().isEmpty) {
@@ -452,8 +705,6 @@ class DatabaseHelper {
     return result.map((json) => PatientVisit.fromMap(json)).toList();
   }
 
-
-
   Future<List<Bill>> getBillsForPatient(int patientId) async {
     final db = await instance.database;
     final result = await db.query('bills', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
@@ -476,6 +727,21 @@ class DatabaseHelper {
     final nextId = maxId + 1;
     final year = DateTime.now().year;
     return 'INV-$year-${nextId.toString().padLeft(4, '0')}';
+  }
+
+  Future<void> resetAndSeedDatabase() async {
+    final db = await instance.database;
+    await db.execute('PRAGMA foreign_keys = OFF;');
+    await db.execute('DROP TABLE IF EXISTS "sync_queue";');
+    await db.execute('DROP TABLE IF EXISTS "audit_logs";');
+    await db.execute('DROP TABLE IF EXISTS "bill_items";');
+    await db.execute('DROP TABLE IF EXISTS "bills";');
+    await db.execute('DROP TABLE IF EXISTS "patient_visits";');
+    await db.execute('DROP TABLE IF EXISTS "patients";');
+    await db.execute('DROP TABLE IF EXISTS "users";');
+    await db.execute('DROP TABLE IF EXISTS "roles";');
+    await _createDB(db, 1);
+    await db.execute('PRAGMA foreign_keys = ON;');
   }
 
   Future<void> close() async {

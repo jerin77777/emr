@@ -600,6 +600,32 @@
         "description": "Doctor / Physician with clinical access",
         "permissions": "clinical,patients,prescriptions,billing"
       }
+    ],
+    "users": [
+      {
+        "user_uuid": "usr-admin-default",
+        "username": "admin",
+        "password_hash": "admin",
+        "full_name": "System Administrator",
+        "specialization": "Administration",
+        "license_number": "ADMIN-001",
+        "phone": "1234567890",
+        "email": "admin@clinic.com",
+        "role": "Admin",
+        "is_active": 1
+      },
+      {
+        "user_uuid": "usr-doctor-default",
+        "username": "doctor",
+        "password_hash": "doctor",
+        "full_name": "Dr. John Doe",
+        "specialization": "General Medicine",
+        "license_number": "MED-1001",
+        "phone": "0987654321",
+        "email": "doctor@clinic.com",
+        "role": "Doctor",
+        "is_active": 1
+      }
     ]
   }
 }

@@ -412,7 +412,6 @@ class PatientVisit {
   }
 }
 
-
 class Bill {
   final int? id;
   final String billNumber;

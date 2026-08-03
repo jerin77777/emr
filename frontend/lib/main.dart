@@ -4,7 +4,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'database/database_helper.dart';
 import 'models/models.dart';
 import 'views/patient_management_view.dart';
-import 'views/billing_view.dart';
+
+bool debug = false;
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,7 @@ class EMRApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'EMR Clinic Management System',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -32,6 +35,132 @@ class EMRApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const LoginScreen(),
+      builder: (context, child) {
+        if (!debug) return child ?? const SizedBox.shrink();
+        return Stack(
+          children: [
+            ?child,
+            const Positioned(
+              bottom: 20,
+              right: 20,
+              child: DebugResetDbButton(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class DebugResetDbButton extends StatefulWidget {
+  const DebugResetDbButton({super.key});
+
+  @override
+  State<DebugResetDbButton> createState() => _DebugResetDbButtonState();
+}
+
+class _DebugResetDbButtonState extends State<DebugResetDbButton> {
+  bool _isResetting = false;
+
+  Future<void> _handleReset() async {
+    final navContext = navigatorKey.currentContext;
+    if (navContext == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: navContext,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Reset Database?'),
+          ],
+        ),
+        content: const Text(
+          'This will delete all current records (patients, visits, bills, audit logs) and re-seed default admin and doctor accounts.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset & Seed'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _isResetting = true;
+    });
+
+    try {
+      await DatabaseHelper.instance.resetAndSeedDatabase();
+
+      final currentNavContext = navigatorKey.currentContext;
+      if (currentNavContext != null && currentNavContext.mounted) {
+        ScaffoldMessenger.of(currentNavContext).showSnackBar(
+          const SnackBar(
+            content: Text('Database reset and seeded successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      final currentNavContext = navigatorKey.currentContext;
+      if (currentNavContext != null && currentNavContext.mounted) {
+        ScaffoldMessenger.of(currentNavContext).showSnackBar(
+          SnackBar(
+            content: Text('Error resetting database: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResetting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: FloatingActionButton.extended(
+        heroTag: 'debug_reset_db_fab',
+        backgroundColor: Colors.red.shade700,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        icon: _isResetting
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.delete_forever),
+        label: Text(_isResetting ? 'Resetting...' : 'Reset DB'),
+        onPressed: _isResetting ? null : _handleReset,
+      ),
     );
   }
 }
@@ -65,9 +194,45 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     try {
-      final users = await DatabaseHelper.instance.getAllUsers();
+      var users = await DatabaseHelper.instance.getAllUsers();
+      if (users.isEmpty) {
+        // Ensure default users are seeded for existing DBs
+        await DatabaseHelper.instance.insertUser(
+          const User(
+            userUuid: 'usr-admin-default',
+            username: 'admin',
+            passwordHash: 'admin',
+            fullName: 'System Administrator',
+            specialization: 'Administration',
+            licenseNumber: 'ADMIN-001',
+            phone: '1234567890',
+            email: 'admin@clinic.com',
+            role: 'Admin',
+            isActive: 1,
+          ),
+        );
+        await DatabaseHelper.instance.insertUser(
+          const User(
+            userUuid: 'usr-doctor-default',
+            username: 'doctor',
+            passwordHash: 'doctor',
+            fullName: 'Dr. John Doe',
+            specialization: 'General Medicine',
+            licenseNumber: 'MED-1001',
+            phone: '0987654321',
+            email: 'doctor@clinic.com',
+            role: 'Doctor',
+            isActive: 1,
+          ),
+        );
+        users = await DatabaseHelper.instance.getAllUsers();
+      }
+
       final matchedUser = users.firstWhere(
-        (u) => u.username == username && u.passwordHash == password && u.isActive == 1,
+        (u) =>
+            u.username == username &&
+            u.passwordHash == password &&
+            u.isActive == 1,
         orElse: () => const User(
           id: -1,
           userUuid: '',
@@ -92,7 +257,8 @@ class _LoginScreenState extends State<LoginScreen> {
           AuditLog(
             userId: matchedUser.id,
             action: 'User Login',
-            details: 'User ${matchedUser.username} (${matchedUser.role}) logged in',
+            details:
+                'User ${matchedUser.username} (${matchedUser.role}) logged in',
           ),
         );
 
@@ -137,7 +303,9 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SingleChildScrollView(
             child: Card(
               elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               margin: const EdgeInsets.all(24),
               child: Container(
                 width: 400,
@@ -154,14 +322,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           height: 80,
                           width: 80,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Icon(Icons.local_hospital, size: 64, color: Colors.teal.shade700),
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.local_hospital,
+                            size: 64,
+                            color: Colors.teal.shade700,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'EMR Clinic Portal',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: Colors.teal.shade900,
                             ),
@@ -194,7 +366,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           prefixIcon: Icon(Icons.person),
                           border: OutlineInputBorder(),
                         ),
-                        validator: (value) => value!.isEmpty ? 'Enter username' : null,
+                        validator: (value) =>
+                            value!.isEmpty ? 'Enter username' : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -205,7 +378,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           prefixIcon: Icon(Icons.lock),
                           border: OutlineInputBorder(),
                         ),
-                        validator: (value) => value!.isEmpty ? 'Enter password' : null,
+                        validator: (value) =>
+                            value!.isEmpty ? 'Enter password' : null,
                       ),
                       const SizedBox(height: 24),
                       SizedBox(
@@ -224,15 +398,27 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? const SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
                                 )
-                              : const Text('LOGIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              : const Text(
+                                  'LOGIN',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Default Admin: admin / admin',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
@@ -257,7 +443,8 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
+class _AdminDashboardState extends State<AdminDashboard>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -297,7 +484,10 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           labelColor: Colors.white,
           unselectedLabelColor: Colors.teal.shade100,
           tabs: const [
-            Tab(icon: Icon(Icons.medical_services), text: 'Patient Directory & EMR'),
+            Tab(
+              icon: Icon(Icons.medical_services),
+              text: 'Patient Directory & EMR',
+            ),
             Tab(icon: Icon(Icons.people), text: 'User Management'),
             Tab(icon: Icon(Icons.security), text: 'Role Management'),
           ],
@@ -345,11 +535,19 @@ class _UserManagementTabState extends State<UserManagementTab> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete User'),
-        content: Text('Are you sure you want to delete user "${user.username}" (${user.fullName})?'),
+        content: Text(
+          'Are you sure you want to delete user "${user.username}" (${user.fullName})?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
           ),
@@ -360,9 +558,9 @@ class _UserManagementTabState extends State<UserManagementTab> {
     if (confirm == true && user.id != null) {
       await DatabaseHelper.instance.deleteUser(user.id!);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted user ${user.username}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Deleted user ${user.username}')));
       _loadUsers();
     }
   }
@@ -503,14 +701,24 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
     final user = User(
       id: widget.existingUser?.id,
-      userUuid: widget.existingUser?.userUuid ?? 'usr-${DateTime.now().millisecondsSinceEpoch}',
+      userUuid:
+          widget.existingUser?.userUuid ??
+          'usr-${DateTime.now().millisecondsSinceEpoch}',
       username: _usernameController.text.trim(),
       passwordHash: _passwordController.text.trim(),
       fullName: _fullNameController.text.trim(),
-      specialization: _specController.text.trim().isEmpty ? null : _specController.text.trim(),
-      licenseNumber: _licenseController.text.trim().isEmpty ? null : _licenseController.text.trim(),
-      phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+      specialization: _specController.text.trim().isEmpty
+          ? null
+          : _specController.text.trim(),
+      licenseNumber: _licenseController.text.trim().isEmpty
+          ? null
+          : _licenseController.text.trim(),
+      phone: _phoneController.text.trim().isEmpty
+          ? null
+          : _phoneController.text.trim(),
+      email: _emailController.text.trim().isEmpty
+          ? null
+          : _emailController.text.trim(),
       role: _selectedRole,
       isActive: 1,
     );
@@ -529,7 +737,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.existingUser != null;
     return AlertDialog(
-      title: Text(isEditing ? 'Edit User / Doctor' : 'Create New User / Doctor'),
+      title: Text(
+        isEditing ? 'Edit User / Doctor' : 'Create New User / Doctor',
+      ),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -558,22 +768,35 @@ class _UserFormDialogState extends State<UserFormDialog> {
                 DropdownButtonFormField<String>(
                   initialValue: _selectedRole,
                   decoration: const InputDecoration(labelText: 'Role *'),
-                  items: (_availableRoles.isEmpty
-                          ? [const Role(roleName: 'Doctor'), const Role(roleName: 'Admin')]
-                          : _availableRoles)
-                      .map((r) => DropdownMenuItem(value: r.roleName, child: Text(r.roleName)))
-                      .toList(),
+                  items:
+                      (_availableRoles.isEmpty
+                              ? [
+                                  const Role(roleName: 'Doctor'),
+                                  const Role(roleName: 'Admin'),
+                                ]
+                              : _availableRoles)
+                          .map(
+                            (r) => DropdownMenuItem(
+                              value: r.roleName,
+                              child: Text(r.roleName),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (v) {
                     if (v != null) setState(() => _selectedRole = v);
                   },
                 ),
                 TextFormField(
                   controller: _specController,
-                  decoration: const InputDecoration(labelText: 'Specialization (e.g. Cardiology)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Specialization (e.g. Cardiology)',
+                  ),
                 ),
                 TextFormField(
                   controller: _licenseController,
-                  decoration: const InputDecoration(labelText: 'License Number (e.g. MED-1234)'),
+                  decoration: const InputDecoration(
+                    labelText: 'License Number (e.g. MED-1234)',
+                  ),
                 ),
                 TextFormField(
                   controller: _phoneController,
@@ -589,9 +812,15 @@ class _UserFormDialogState extends State<UserFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal.shade700,
+            foregroundColor: Colors.white,
+          ),
           onPressed: _saveUser,
           child: const Text('Save User'),
         ),
@@ -630,11 +859,19 @@ class _RoleManagementTabState extends State<RoleManagementTab> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Role'),
-        content: Text('Are you sure you want to delete role "${role.roleName}"?'),
+        content: Text(
+          'Are you sure you want to delete role "${role.roleName}"?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
           ),
@@ -645,9 +882,9 @@ class _RoleManagementTabState extends State<RoleManagementTab> {
     if (confirm == true && role.id != null) {
       await DatabaseHelper.instance.deleteRole(role.id!);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted role ${role.roleName}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Deleted role ${role.roleName}')));
       _loadRoles();
     }
   }
@@ -704,7 +941,10 @@ class _RoleManagementTabState extends State<RoleManagementTab> {
                   ),
                   title: Text(
                     role.roleName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   subtitle: Text(
                     'Description: ${role.description ?? "N/A"}\nPermissions: ${role.permissions ?? "None"}',
@@ -765,8 +1005,12 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
     final role = Role(
       id: widget.existingRole?.id,
       roleName: _nameController.text.trim(),
-      description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-      permissions: _permController.text.trim().isEmpty ? null : _permController.text.trim(),
+      description: _descController.text.trim().isEmpty
+          ? null
+          : _descController.text.trim(),
+      permissions: _permController.text.trim().isEmpty
+          ? null
+          : _permController.text.trim(),
     );
 
     if (widget.existingRole == null) {
@@ -794,7 +1038,9 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
               children: [
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Role Name (e.g. Nurse, Radiologist) *'),
+                  decoration: const InputDecoration(
+                    labelText: 'Role Name (e.g. Nurse, Radiologist) *',
+                  ),
                   validator: (v) => v!.isEmpty ? 'Role Name required' : null,
                 ),
                 TextFormField(
@@ -803,7 +1049,10 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
                 ),
                 TextFormField(
                   controller: _permController,
-                  decoration: const InputDecoration(labelText: 'Permissions (comma-separated, e.g. clinical,billing)'),
+                  decoration: const InputDecoration(
+                    labelText:
+                        'Permissions (comma-separated, e.g. clinical,billing)',
+                  ),
                 ),
               ],
             ),
@@ -811,9 +1060,15 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal.shade700,
+            foregroundColor: Colors.white,
+          ),
           onPressed: _saveRole,
           child: const Text('Save Role'),
         ),
@@ -825,34 +1080,15 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
 // ============================================================================
 // 5. STAFF DASHBOARD (Doctor / Receptionist Workspace)
 // ============================================================================
-class StaffDashboard extends StatefulWidget {
+class StaffDashboard extends StatelessWidget {
   final User currentUser;
   const StaffDashboard({super.key, required this.currentUser});
-
-  @override
-  State<StaffDashboard> createState() => _StaffDashboardState();
-}
-
-class _StaffDashboardState extends State<StaffDashboard> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.currentUser.role} Workspace (${widget.currentUser.fullName})'),
+        title: Text('${currentUser.role} Workspace (${currentUser.fullName})'),
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
@@ -867,24 +1103,8 @@ class _StaffDashboardState extends State<StaffDashboard> with SingleTickerProvid
             },
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.teal.shade100,
-          tabs: const [
-            Tab(icon: Icon(Icons.medical_services), text: 'Patient Directory & EMR'),
-            Tab(icon: Icon(Icons.receipt_long), text: 'Billing Module'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          PatientManagementView(currentUser: widget.currentUser),
-          BillingView(currentUser: widget.currentUser),
-        ],
-      ),
+      body: PatientManagementView(currentUser: currentUser),
     );
   }
 }

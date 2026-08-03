@@ -240,7 +240,24 @@ def generate_dart_files(schema: Dict[str, Any], frontend_lib_dir: str):
         "        await db.execute('PRAGMA foreign_keys = ON;');",
         "      },",
         "      onCreate: _createDB,",
+        "      onOpen: _migrateSchema,",
         "    );",
+        "  }",
+        "",
+        "  Future<void> _migrateSchema(Database db) async {",
+        "    try {",
+        "\n".join([
+            f"      final {snake_to_camel(t['name'])}Info = await db.rawQuery(\"PRAGMA table_info('{t['name']}')\");\n"
+            f"      final {snake_to_camel(t['name'])}Cols = {snake_to_camel(t['name'])}Info.map((c) => c['name'] as String).toSet();\n" +
+            "\n".join([
+                f"      if (!{snake_to_camel(t['name'])}Cols.contains('{c['name']}')) {{\n"
+                f"        await db.execute('ALTER TABLE \"{t['name']}\" ADD COLUMN \"{c['name']}\" {c['type']};');\n"
+                f"      }}"
+                for c in t.get("columns", []) if not c.get("primary_key")
+            ])
+            for t in schema.get("tables", [])
+        ]),
+        "    } catch (_) {}",
         "  }",
         "",
         "  Future<void> _createDB(Database db, int version) async {"
@@ -319,6 +336,67 @@ def generate_dart_files(schema: Dict[str, Any], frontend_lib_dir: str):
         db_code.append("  }")
         db_code.append("")
 
+    # Add custom EMR Specialized Queries
+    db_code.append("  // === Custom EMR Specialized Queries ===")
+    db_code.append("  Future<List<Patient>> searchPatients(String query) async {")
+    db_code.append("    final db = await instance.database;")
+    db_code.append("    if (query.trim().isEmpty) {")
+    db_code.append("      final result = await db.query('patients', orderBy: 'id DESC');")
+    db_code.append("      return result.map((json) => Patient.fromMap(json)).toList();")
+    db_code.append("    }")
+    db_code.append("    final q = '%${query.trim().toLowerCase()}%';")
+    db_code.append("    final result = await db.rawQuery('''")
+    db_code.append("      SELECT * FROM patients ")
+    db_code.append("      WHERE LOWER(full_name) LIKE ? ")
+    db_code.append("         OR LOWER(patient_code) LIKE ? ")
+    db_code.append("         OR LOWER(mobile_number) LIKE ? ")
+    db_code.append("         OR LOWER(referral_doctor) LIKE ?")
+    db_code.append("      ORDER BY id DESC")
+    db_code.append("    ''', [q, q, q, q]);")
+    db_code.append("    return result.map((json) => Patient.fromMap(json)).toList();")
+    db_code.append("  }")
+    db_code.append("")
+    db_code.append("  Future<List<PatientVisit>> getVisitsForPatient(int patientId) async {")
+    db_code.append("    final db = await instance.database;")
+    db_code.append("    final result = await db.query('patient_visits', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');")
+    db_code.append("    return result.map((json) => PatientVisit.fromMap(json)).toList();")
+    db_code.append("  }")
+    db_code.append("")
+    db_code.append("  Future<List<Bill>> getBillsForPatient(int patientId) async {")
+    db_code.append("    final db = await instance.database;")
+    db_code.append("    final result = await db.query('bills', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');")
+    db_code.append("    return result.map((json) => Bill.fromMap(json)).toList();")
+    db_code.append("  }")
+    db_code.append("")
+    db_code.append("  Future<String> generateNextPatientCode() async {")
+    db_code.append("    final db = await instance.database;")
+    db_code.append("    final result = await db.rawQuery('SELECT MAX(id) as max_id FROM patients');")
+    db_code.append("    final maxId = (result.first['max_id'] as num?)?.toInt() ?? 0;")
+    db_code.append("    final nextId = maxId + 1;")
+    db_code.append("    final year = DateTime.now().year;")
+    db_code.append("    return 'PAT-$year-${nextId.toString().padLeft(3, '0')}';")
+    db_code.append("  }")
+    db_code.append("")
+    db_code.append("  Future<String> generateNextBillNumber() async {")
+    db_code.append("    final db = await instance.database;")
+    db_code.append("    final result = await db.rawQuery('SELECT MAX(id) as max_id FROM bills');")
+    db_code.append("    final maxId = (result.first['max_id'] as num?)?.toInt() ?? 0;")
+    db_code.append("    final nextId = maxId + 1;")
+    db_code.append("    final year = DateTime.now().year;")
+    db_code.append("    return 'INV-$year-${nextId.toString().padLeft(4, '0')}';")
+    db_code.append("  }")
+    db_code.append("")
+
+    db_code.append("  Future<void> resetAndSeedDatabase() async {")
+    db_code.append("    final db = await instance.database;")
+    db_code.append("    await db.execute('PRAGMA foreign_keys = OFF;');")
+    for table in reversed(schema.get("tables", [])):
+        t_name = table["name"]
+        db_code.append(f"    await db.execute('DROP TABLE IF EXISTS \"{t_name}\";');")
+    db_code.append("    await _createDB(db, 1);")
+    db_code.append("    await db.execute('PRAGMA foreign_keys = ON;');")
+    db_code.append("  }")
+    db_code.append("")
     db_code.append("  Future<void> close() async {")
     db_code.append("    final db = await instance.database;")
     db_code.append("    db.close();")

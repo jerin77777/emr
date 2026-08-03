@@ -55,6 +55,19 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
     } else {
       _generatedPatientCode = p.patientCode;
     }
+
+    // Auto-calculate age if DOB exists but age is empty
+    if (_dobController.text.isNotEmpty && _ageController.text.isEmpty) {
+      final parsed = DateTime.tryParse(_dobController.text);
+      if (parsed != null) {
+        final now = DateTime.now();
+        int age = now.year - parsed.year;
+        if (now.month < parsed.month || (now.month == parsed.month && now.day < parsed.day)) {
+          age--;
+        }
+        _ageController.text = age.toString();
+      }
+    }
   }
 
   Future<void> _loadNextPatientCode() async {
@@ -82,9 +95,19 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
 
   Future<void> _selectDateOfBirth() async {
     final now = DateTime.now();
-    final initialDate = widget.existingPatient?.dateOfBirth != null
-        ? DateTime.tryParse(widget.existingPatient!.dateOfBirth) ?? DateTime(1990, 1, 1)
-        : DateTime(1990, 1, 1);
+    DateTime initialDate = DateTime(1990, 1, 1);
+    if (_dobController.text.isNotEmpty) {
+      final parsed = DateTime.tryParse(_dobController.text);
+      if (parsed != null && !parsed.isAfter(now)) {
+        initialDate = parsed;
+      }
+    } else if (widget.existingPatient?.dateOfBirth != null) {
+      final parsed = DateTime.tryParse(widget.existingPatient!.dateOfBirth);
+      if (parsed != null && !parsed.isAfter(now)) {
+        initialDate = parsed;
+      }
+    }
+
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -94,12 +117,21 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
 
     if (picked != null) {
       final formatted = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-      final age = now.year - picked.year - ((now.month < picked.month || (now.month == picked.month && now.day < picked.day)) ? 1 : 0);
+      int age = now.year - picked.year;
+      if (now.month < picked.month || (now.month == picked.month && now.day < picked.day)) {
+        age--;
+      }
       setState(() {
         _dobController.text = formatted;
         _ageController.text = age.toString();
       });
     }
+  }
+
+  String? _sanitizeInput(String? text) {
+    if (text == null) return null;
+    final cleaned = text.replaceAll('\x00', '').trim();
+    return cleaned.isEmpty ? null : cleaned;
   }
 
   Future<void> _savePatient() async {
@@ -111,20 +143,28 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
       final uuid = widget.existingPatient?.patientUuid ?? 'pat-${DateTime.now().millisecondsSinceEpoch}';
       final ageNum = int.tryParse(_ageController.text.trim());
 
+      final fullName = _sanitizeInput(_fullNameController.text);
+      final dob = _sanitizeInput(_dobController.text);
+      final mobile = _sanitizeInput(_mobileController.text);
+
+      if (fullName == null || dob == null || mobile == null) {
+        throw Exception('Required fields (Full Name, Date of Birth, Mobile Number) cannot be blank.');
+      }
+
       final patient = Patient(
         id: widget.existingPatient?.id,
         patientUuid: uuid,
         patientCode: _generatedPatientCode,
-        fullName: _fullNameController.text.trim(),
-        dateOfBirth: _dobController.text.trim(),
+        fullName: fullName,
+        dateOfBirth: dob,
         age: ageNum,
         gender: _gender,
-        occupation: _occupationController.text.trim().isEmpty ? null : _occupationController.text.trim(),
-        mobileNumber: _mobileController.text.trim(),
-        address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-        emergencyContact: _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
-        referralDoctor: _referralDoctorController.text.trim().isEmpty ? null : _referralDoctorController.text.trim(),
+        occupation: _sanitizeInput(_occupationController.text),
+        mobileNumber: mobile,
+        address: _sanitizeInput(_addressController.text),
+        email: _sanitizeInput(_emailController.text),
+        emergencyContact: _sanitizeInput(_emergencyContactController.text),
+        referralDoctor: _sanitizeInput(_referralDoctorController.text),
         syncStatus: 'pending',
       );
 
@@ -248,6 +288,17 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
                             child: TextFormField(
                               controller: _ageController,
                               keyboardType: TextInputType.number,
+                              onChanged: (v) {
+                                final ageNum = int.tryParse(v.trim());
+                                if (ageNum != null && ageNum >= 0 && ageNum <= 130) {
+                                  final now = DateTime.now();
+                                  final approxYear = now.year - ageNum;
+                                  final approxDob = "$approxYear-01-01";
+                                  if (_dobController.text.isEmpty) {
+                                    _dobController.text = approxDob;
+                                  }
+                                }
+                              },
                               decoration: const InputDecoration(
                                 labelText: 'Age (Years)',
                                 prefixIcon: Icon(Icons.numbers),
