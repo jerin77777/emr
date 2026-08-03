@@ -1,0 +1,605 @@
+{
+  "database_name": "emr_clinic_database",
+  "version": 1,
+  "tables": [
+    {
+      "name": "roles",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "role_name",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "description",
+          "type": "TEXT"
+        },
+        {
+          "name": "permissions",
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_roles_name",
+          "columns": ["role_name"],
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "user_uuid",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "username",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "password_hash",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "full_name",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "specialization",
+          "type": "TEXT"
+        },
+        {
+          "name": "license_number",
+          "type": "TEXT"
+        },
+        {
+          "name": "phone",
+          "type": "TEXT"
+        },
+        {
+          "name": "email",
+          "type": "TEXT"
+        },
+        {
+          "name": "role",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "is_active",
+          "type": "INTEGER",
+          "not_null": true,
+          "default": "1"
+        },
+        {
+          "name": "created_at",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_users_username",
+          "columns": ["username"],
+          "unique": true
+        },
+        {
+          "name": "idx_users_role",
+          "columns": ["role"],
+          "unique": false
+        }
+      ]
+    },
+    {
+      "name": "patients",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "patient_uuid",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "patient_code",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "full_name",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "date_of_birth",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "age",
+          "type": "INTEGER"
+        },
+        {
+          "name": "gender",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "occupation",
+          "type": "TEXT"
+        },
+        {
+          "name": "mobile_number",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "address",
+          "type": "TEXT"
+        },
+        {
+          "name": "email",
+          "type": "TEXT"
+        },
+        {
+          "name": "emergency_contact",
+          "type": "TEXT"
+        },
+        {
+          "name": "referral_doctor",
+          "type": "TEXT"
+        },
+        {
+          "name": "registration_date",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "sync_status",
+          "type": "TEXT",
+          "default": "'pending'"
+        },
+        {
+          "name": "updated_at",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_patients_code",
+          "columns": ["patient_code"],
+          "unique": true
+        },
+        {
+          "name": "idx_patients_name",
+          "columns": ["full_name"],
+          "unique": false
+        },
+        {
+          "name": "idx_patients_mobile",
+          "columns": ["mobile_number"],
+          "unique": false
+        }
+      ]
+    },
+    {
+      "name": "patient_visits",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "visit_uuid",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "patient_id",
+          "type": "INTEGER",
+          "not_null": true
+        },
+        {
+          "name": "doctor_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "visit_date",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "visit_number",
+          "type": "INTEGER"
+        },
+        {
+          "name": "chief_complaint",
+          "type": "TEXT"
+        },
+        {
+          "name": "history",
+          "type": "TEXT"
+        },
+        {
+          "name": "past_medical_history",
+          "type": "TEXT"
+        },
+        {
+          "name": "vitals_bp",
+          "type": "TEXT"
+        },
+        {
+          "name": "vitals_pulse",
+          "type": "TEXT"
+        },
+        {
+          "name": "vitals_temp",
+          "type": "TEXT"
+        },
+        {
+          "name": "vitals_saturation",
+          "type": "TEXT"
+        },
+        {
+          "name": "systemic_examination",
+          "type": "TEXT"
+        },
+        {
+          "name": "investigations",
+          "type": "TEXT"
+        },
+        {
+          "name": "diagnosis",
+          "type": "TEXT"
+        },
+        {
+          "name": "advice",
+          "type": "TEXT"
+        },
+        {
+          "name": "referral_to",
+          "type": "TEXT"
+        },
+        {
+          "name": "followup_date",
+          "type": "TEXT"
+        },
+        {
+          "name": "sync_status",
+          "type": "TEXT",
+          "default": "'pending'"
+        },
+        {
+          "name": "created_at",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "patient_id",
+          "references_table": "patients",
+          "references_column": "id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "column": "doctor_id",
+          "references_table": "users",
+          "references_column": "id",
+          "on_delete": "SET NULL"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_visits_patient",
+          "columns": ["patient_id"],
+          "unique": false
+        },
+        {
+          "name": "idx_visits_date",
+          "columns": ["visit_date"],
+          "unique": false
+        }
+      ]
+    },
+    {
+      "name": "bills",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "bill_number",
+          "type": "TEXT",
+          "not_null": true,
+          "unique": true
+        },
+        {
+          "name": "visit_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "patient_id",
+          "type": "INTEGER",
+          "not_null": true
+        },
+        {
+          "name": "consultation_charges",
+          "type": "REAL",
+          "default": "0.0"
+        },
+        {
+          "name": "procedure_charges",
+          "type": "REAL",
+          "default": "0.0"
+        },
+        {
+          "name": "additional_charges",
+          "type": "REAL",
+          "default": "0.0"
+        },
+        {
+          "name": "discount_amount",
+          "type": "REAL",
+          "default": "0.0"
+        },
+        {
+          "name": "total_amount",
+          "type": "REAL",
+          "not_null": true
+        },
+        {
+          "name": "paid_amount",
+          "type": "REAL",
+          "default": "0.0"
+        },
+        {
+          "name": "payment_status",
+          "type": "TEXT",
+          "not_null": true,
+          "default": "'Pending'"
+        },
+        {
+          "name": "payment_method",
+          "type": "TEXT"
+        },
+        {
+          "name": "bill_date",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "sync_status",
+          "type": "TEXT",
+          "default": "'pending'"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "visit_id",
+          "references_table": "patient_visits",
+          "references_column": "id",
+          "on_delete": "SET NULL"
+        },
+        {
+          "column": "patient_id",
+          "references_table": "patients",
+          "references_column": "id",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_bills_patient",
+          "columns": ["patient_id"],
+          "unique": false
+        },
+        {
+          "name": "idx_bills_number",
+          "columns": ["bill_number"],
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "bill_items",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "bill_id",
+          "type": "INTEGER",
+          "not_null": true
+        },
+        {
+          "name": "item_description",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "amount",
+          "type": "REAL",
+          "not_null": true
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "bill_id",
+          "references_table": "bills",
+          "references_column": "id",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_bill_items_bill",
+          "columns": ["bill_id"],
+          "unique": false
+        }
+      ]
+    },
+    {
+      "name": "audit_logs",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "user_id",
+          "type": "INTEGER"
+        },
+        {
+          "name": "action",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "details",
+          "type": "TEXT"
+        },
+        {
+          "name": "timestamp",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "sync_status",
+          "type": "TEXT",
+          "default": "'pending'"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "user_id",
+          "references_table": "users",
+          "references_column": "id",
+          "on_delete": "SET NULL"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_audit_user",
+          "columns": ["user_id"],
+          "unique": false
+        },
+        {
+          "name": "idx_audit_action",
+          "columns": ["action"],
+          "unique": false
+        }
+      ]
+    },
+    {
+      "name": "sync_queue",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "primary_key": true,
+          "auto_increment": true
+        },
+        {
+          "name": "table_name",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "record_id",
+          "type": "INTEGER",
+          "not_null": true
+        },
+        {
+          "name": "operation",
+          "type": "TEXT",
+          "not_null": true
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "not_null": true,
+          "default": "'pending'"
+        },
+        {
+          "name": "last_attempt",
+          "type": "TEXT"
+        },
+        {
+          "name": "error_message",
+          "type": "TEXT"
+        },
+        {
+          "name": "created_at",
+          "type": "TEXT",
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_sync_status",
+          "columns": ["status"],
+          "unique": false
+        }
+      ]
+    }
+  ],
+  "seed_data": {
+    "roles": [
+      {
+        "role_name": "Admin",
+        "description": "System Administrator with full access",
+        "permissions": "all"
+      },
+      {
+        "role_name": "Doctor",
+        "description": "Doctor / Physician with clinical access",
+        "permissions": "clinical,patients,prescriptions,billing"
+      }
+    ]
+  }
+}
