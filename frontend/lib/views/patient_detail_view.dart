@@ -21,22 +21,18 @@ class PatientDetailView extends StatefulWidget {
 class _PatientDetailViewState extends State<PatientDetailView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Future<List<PatientVisit>> _visitsFuture;
-  late Future<List<VitalSign>> _vitalsFuture;
-  late Future<List<Diagnosis>> _diagnosesFuture;
   late Future<List<Bill>> _billsFuture;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _refreshData();
   }
 
   void _refreshData() {
     setState(() {
       _visitsFuture = DatabaseHelper.instance.getVisitsForPatient(widget.patient.id!);
-      _vitalsFuture = DatabaseHelper.instance.getVitalsForPatient(widget.patient.id!);
-      _diagnosesFuture = DatabaseHelper.instance.getDiagnosesForPatient(widget.patient.id!);
       _billsFuture = DatabaseHelper.instance.getBillsForPatient(widget.patient.id!);
     });
   }
@@ -173,7 +169,6 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
             indicatorWeight: 3,
             tabs: const [
               Tab(icon: Icon(Icons.history_edu), text: 'Visits & Clinical Timeline'),
-              Tab(icon: Icon(Icons.favorite_border), text: 'Vitals & Diagnoses Overview'),
               Tab(icon: Icon(Icons.receipt_long), text: 'Billing & Invoices'),
             ],
           ),
@@ -183,7 +178,6 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
               controller: _tabController,
               children: [
                 _buildVisitsTimelineTab(),
-                _buildVitalsDiagnosesTab(),
                 _buildBillingTab(),
               ],
             ),
@@ -250,99 +244,7 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
     );
   }
 
-  // 2. VITALS & DIAGNOSES OVERVIEW TAB
-  Widget _buildVitalsDiagnosesTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Diagnoses Section
-          Text('Diagnosis History', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<List<Diagnosis>>(
-            future: _diagnosesFuture,
-            builder: (context, snapshot) {
-              final diagnoses = snapshot.data ?? [];
-              if (diagnoses.isEmpty) {
-                return const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No diagnoses recorded yet.')));
-              }
-
-              return Card(
-                elevation: 2,
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: diagnoses.length,
-                  separatorBuilder: (c, i) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final d = diagnoses[index];
-                    final dType = d.diagnosisType ?? 'Primary';
-                    final initial = dType.isNotEmpty ? dType[0] : 'D';
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: dType == 'Primary' ? Colors.red.shade100 : Colors.orange.shade100,
-                        child: Text(initial, style: TextStyle(fontWeight: FontWeight.bold, color: dType == 'Primary' ? Colors.red.shade900 : Colors.orange.shade900)),
-                      ),
-                      title: Text(d.diagnosisName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('ICD Code: ${d.icdCode ?? "N/A"} | Notes: ${d.notes ?? "None"}'),
-                      trailing: Chip(label: Text(dType)),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          // Vitals History Table
-          Text('Vitals History Log', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<List<VitalSign>>(
-            future: _vitalsFuture,
-            builder: (context, snapshot) {
-              final vitals = snapshot.data ?? [];
-              if (vitals.isEmpty) {
-                return const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No vital signs recorded yet.')));
-              }
-
-              return Card(
-                elevation: 2,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Date & Time')),
-                      DataColumn(label: Text('BP (mmHg)')),
-                      DataColumn(label: Text('Pulse (bpm)')),
-                      DataColumn(label: Text('Temp (°C)')),
-                      DataColumn(label: Text('SpO2 (%)')),
-                      DataColumn(label: Text('Weight (kg)')),
-                      DataColumn(label: Text('Height (cm)')),
-                      DataColumn(label: Text('BMI')),
-                    ],
-                    rows: vitals.map((v) {
-                      return DataRow(cells: [
-                        DataCell(Text(v.recordedAt ?? '')),
-                        DataCell(Text('${v.systolicBp ?? "-"}/${v.diastolicBp ?? "-"}')),
-                        DataCell(Text(v.pulseRate != null ? '${v.pulseRate}' : '-')),
-                        DataCell(Text(v.temperatureCelsius != null ? '${v.temperatureCelsius}' : '-')),
-                        DataCell(Text(v.oxygenSaturation != null ? '${v.oxygenSaturation}%' : '-')),
-                        DataCell(Text(v.weightKg != null ? '${v.weightKg}' : '-')),
-                        DataCell(Text(v.heightCm != null ? '${v.heightCm}' : '-')),
-                        DataCell(Text(v.bmi != null ? v.bmi!.toStringAsFixed(1) : '-')),
-                      ]);
-                    }).toList(),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 3. BILLING TAB
+  // 2. BILLING TAB
   Widget _buildBillingTab() {
     return FutureBuilder<List<Bill>>(
       future: _billsFuture,
@@ -376,22 +278,23 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
           itemCount: bills.length,
           itemBuilder: (context, index) {
             final bill = bills[index];
+            final status = bill.paymentStatus ?? 'Pending';
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               elevation: 2,
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: bill.paymentStatus == 'Paid' ? Colors.green.shade100 : Colors.amber.shade100,
+                  backgroundColor: status == 'Paid' ? Colors.green.shade100 : Colors.amber.shade100,
                   child: Icon(
-                    bill.paymentStatus == 'Paid' ? Icons.check_circle : Icons.pending,
-                    color: bill.paymentStatus == 'Paid' ? Colors.green.shade800 : Colors.amber.shade900,
+                    status == 'Paid' ? Icons.check_circle : Icons.pending,
+                    color: status == 'Paid' ? Colors.green.shade800 : Colors.amber.shade900,
                   ),
                 ),
                 title: Text('${bill.billNumber} | ₹${bill.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('Date: ${bill.billDate ?? "N/A"} | Method: ${bill.paymentMethod ?? "Cash"}'),
                 trailing: Chip(
-                  label: Text(bill.paymentStatus ?? 'Pending'),
-                  backgroundColor: (bill.paymentStatus ?? '') == 'Paid' ? Colors.green.shade50 : Colors.amber.shade50,
+                  label: Text(status),
+                  backgroundColor: status == 'Paid' ? Colors.green.shade50 : Colors.amber.shade50,
                 ),
               ),
             );
@@ -415,26 +318,16 @@ class _VisitCard extends StatefulWidget {
 class _VisitCardState extends State<_VisitCard> {
   bool _expanded = false;
 
-  late Future<List<VitalSign>> _vitals;
-  late Future<List<Diagnosis>> _diagnoses;
-  late Future<List<Prescription>> _prescriptions;
-  late Future<List<Investigation>> _investigations;
-  late Future<List<Referral>> _referrals;
-
-  @override
-  void initState() {
-    super.initState();
-    final vid = widget.visit.id!;
-    _vitals = DatabaseHelper.instance.getVitalsForVisit(vid);
-    _diagnoses = DatabaseHelper.instance.getDiagnosesForVisit(vid);
-    _prescriptions = DatabaseHelper.instance.getPrescriptionsForVisit(vid);
-    _investigations = DatabaseHelper.instance.getInvestigationsForVisit(vid);
-    _referrals = DatabaseHelper.instance.getReferralsForVisit(vid);
-  }
-
   @override
   Widget build(BuildContext context) {
     final v = widget.visit;
+
+    final vitalsList = <String>[];
+    if (v.vitalsBp != null && v.vitalsBp!.isNotEmpty) vitalsList.add('BP: ${v.vitalsBp}');
+    if (v.vitalsPulse != null && v.vitalsPulse!.isNotEmpty) vitalsList.add('Pulse: ${v.vitalsPulse}');
+    if (v.vitalsTemp != null && v.vitalsTemp!.isNotEmpty) vitalsList.add('Temp: ${v.vitalsTemp}');
+    if (v.vitalsSaturation != null && v.vitalsSaturation!.isNotEmpty) vitalsList.add('Saturation: ${v.vitalsSaturation}');
+    final vitalsText = vitalsList.join(' | ');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -470,97 +363,26 @@ class _VisitCardState extends State<_VisitCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Divider(),
-                  if (v.chiefComplaint != null) _section('Chief Complaint', v.chiefComplaint!),
-                  if (v.hpiDuration != null || v.hpiSeverity != null || v.hpiAssociatedSymptoms != null)
-                    _section(
-                      'History of Present Illness (HPI)',
-                      'Duration: ${v.hpiDuration ?? "N/A"} | Severity: ${v.hpiSeverity ?? "N/A"}\n'
-                      'Symptoms: ${v.hpiAssociatedSymptoms ?? "N/A"}\n'
-                      'Progression: ${v.hpiProgression ?? "N/A"} | Previous Treatment: ${v.hpiPreviousTreatments ?? "N/A"}',
-                    ),
-                  if (v.pmhChronicIllness != null || v.pmhAllergies != null || v.pmhCurrentMedications != null)
-                    _section(
-                      'Past Medical History (PMH)',
-                      'Chronic Illness: ${v.pmhChronicIllness ?? "None"} | Allergies: ${v.pmhAllergies ?? "None"}\n'
-                      'Surgeries: ${v.pmhSurgeries ?? "None"} | Current Meds: ${v.pmhCurrentMedications ?? "None"}',
-                    ),
-                  // Vitals
-                  FutureBuilder<List<VitalSign>>(
-                    future: _vitals,
-                    builder: (c, s) {
-                      final vt = s.data ?? [];
-                      if (vt.isEmpty) return const SizedBox.shrink();
-                      final item = vt.first;
-                      return _section(
-                        'Vital Signs',
-                        'BP: ${item.systolicBp ?? "-"}/${item.diastolicBp ?? "-"} mmHg | Pulse: ${item.pulseRate ?? "-"} bpm | '
-                        'Temp: ${item.temperatureCelsius ?? "-"}°C | SpO2: ${item.oxygenSaturation ?? "-"}%\n'
-                        'Weight: ${item.weightKg ?? "-"} kg | Height: ${item.heightCm ?? "-"} cm | BMI: ${item.bmi?.toStringAsFixed(1) ?? "-"}',
-                      );
-                    },
-                  ),
-                  if (v.examGeneral != null || v.examCvs != null || v.examRespiratory != null)
-                    _section(
-                      'Systemic Examination',
-                      'General: ${v.examGeneral ?? "Normal"}\n'
-                      'CVS: ${v.examCvs ?? "Normal"} | Resp: ${v.examRespiratory ?? "Normal"}\n'
-                      'Abdomen: ${v.examAbdomen ?? "Normal"} | CNS: ${v.examCns ?? "Normal"} | Musculoskeletal: ${v.examMusculoskeletal ?? "Normal"}',
-                    ),
-                  // Diagnoses
-                  FutureBuilder<List<Diagnosis>>(
-                    future: _diagnoses,
-                    builder: (c, s) {
-                      final dx = s.data ?? [];
-                      if (dx.isEmpty) return const SizedBox.shrink();
-                      final text = dx.map((d) => '${d.diagnosisName} (${d.diagnosisType}${d.icdCode != null ? ", ICD: ${d.icdCode}" : ""})').join(', ');
-                      return _section('Diagnoses', text);
-                    },
-                  ),
-                  // Investigations
-                  FutureBuilder<List<Investigation>>(
-                    future: _investigations,
-                    builder: (c, s) {
-                      final inv = s.data ?? [];
-                      if (inv.isEmpty) return const SizedBox.shrink();
-                      final text = inv.map((i) => '${i.testName} [${i.category}] ${i.findingsNotes != null ? "(${i.findingsNotes})" : ""}').join(', ');
-                      return _section('Ordered Investigations', text);
-                    },
-                  ),
-                  // Prescriptions
-                  FutureBuilder<List<Prescription>>(
-                    future: _prescriptions,
-                    builder: (c, s) {
-                      final rx = s.data ?? [];
-                      if (rx.isEmpty) return const SizedBox.shrink();
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          const Text('Prescriptions:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
-                          const SizedBox(height: 4),
-                          ...rx.map((r) => Text('• ${r.medicineName} ${r.dosage} - ${r.frequency} for ${r.duration ?? ""} (${r.instructions ?? ""})')),
-                        ],
-                      );
-                    },
-                  ),
-                  // Referrals
-                  FutureBuilder<List<Referral>>(
-                    future: _referrals,
-                    builder: (c, s) {
-                      final ref = s.data ?? [];
-                      if (ref.isEmpty) return const SizedBox.shrink();
-                      final text = ref.map((r) => 'Referred to ${r.providerName} (${r.referredToType}): ${r.reason ?? ""}').join('\n');
-                      return _section('Referrals', text);
-                    },
-                  ),
-                  if (v.adviceLifestyle != null || v.adviceDietary != null || v.adviceFollowupInstructions != null || v.followupDate != null)
-                    _section(
-                      'Doctor Advice & Follow-up',
-                      'Lifestyle: ${v.adviceLifestyle ?? "N/A"}\n'
-                      'Dietary: ${v.adviceDietary ?? "N/A"}\n'
-                      'Instructions: ${v.adviceFollowupInstructions ?? "N/A"}\n'
-                      'Follow-up Date: ${v.followupDate ?? "None"}',
-                    ),
+                  if (v.chiefComplaint != null && v.chiefComplaint!.isNotEmpty)
+                    _section('a. Chief complaints', v.chiefComplaint!),
+                  if (v.history != null && v.history!.isNotEmpty)
+                    _section('b. History', v.history!),
+                  if (v.pastMedicalHistory != null && v.pastMedicalHistory!.isNotEmpty)
+                    _section('c. Past history/Medical History', v.pastMedicalHistory!),
+                  if (vitalsText.isNotEmpty)
+                    _section('d. Vital signs', vitalsText),
+                  if (v.systemicExamination != null && v.systemicExamination!.isNotEmpty)
+                    _section('e. Systemic Examination', v.systemicExamination!),
+                  if (v.investigations != null && v.investigations!.isNotEmpty)
+                    _section('f. Investigations', v.investigations!),
+                  if (v.diagnosis != null && v.diagnosis!.isNotEmpty)
+                    _section('g. Diagnosis', v.diagnosis!),
+                  if (v.advice != null && v.advice!.isNotEmpty)
+                    _section('h. Advice', v.advice!),
+                  if (v.referralTo != null && v.referralTo!.isNotEmpty)
+                    _section('i. Referral to…', v.referralTo!),
+                  if (v.followupDate != null && v.followupDate!.isNotEmpty)
+                    _section('Follow-up Date', v.followupDate!),
                 ],
               ),
             ),

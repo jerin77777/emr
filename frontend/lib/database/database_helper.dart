@@ -89,26 +89,17 @@ class DatabaseHelper {
   "visit_date" TEXT DEFAULT CURRENT_TIMESTAMP,
   "visit_number" INTEGER,
   "chief_complaint" TEXT,
-  "hpi_duration" TEXT,
-  "hpi_severity" TEXT,
-  "hpi_associated_symptoms" TEXT,
-  "hpi_progression" TEXT,
-  "hpi_previous_treatments" TEXT,
-  "pmh_chronic_illness" TEXT,
-  "pmh_previous_diseases" TEXT,
-  "pmh_surgeries" TEXT,
-  "pmh_allergies" TEXT,
-  "pmh_current_medications" TEXT,
-  "exam_general" TEXT,
-  "exam_cvs" TEXT,
-  "exam_respiratory" TEXT,
-  "exam_abdomen" TEXT,
-  "exam_cns" TEXT,
-  "exam_musculoskeletal" TEXT,
-  "advice_lifestyle" TEXT,
-  "advice_dietary" TEXT,
-  "advice_followup_instructions" TEXT,
-  "advice_medication_instructions" TEXT,
+  "history" TEXT,
+  "past_medical_history" TEXT,
+  "vitals_bp" TEXT,
+  "vitals_pulse" TEXT,
+  "vitals_temp" TEXT,
+  "vitals_saturation" TEXT,
+  "systemic_examination" TEXT,
+  "investigations" TEXT,
+  "diagnosis" TEXT,
+  "advice" TEXT,
+  "referral_to" TEXT,
   "followup_date" TEXT,
   "sync_status" TEXT DEFAULT 'pending',
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -117,81 +108,6 @@ class DatabaseHelper {
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_patient" ON "patient_visits" ("patient_id");''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_date" ON "patient_visits" ("visit_date");''');
-    await db.execute('''CREATE TABLE IF NOT EXISTS "vital_signs" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "visit_id" INTEGER NOT NULL,
-  "patient_id" INTEGER NOT NULL,
-  "recorded_at" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "systolic_bp" INTEGER,
-  "diastolic_bp" INTEGER,
-  "pulse_rate" INTEGER,
-  "temperature_celsius" REAL,
-  "oxygen_saturation" REAL,
-  "weight_kg" REAL,
-  "height_cm" REAL,
-  "bmi" REAL,
-  "sync_status" TEXT DEFAULT 'pending',
-  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE,
-  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
-);''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_vitals_patient" ON "vital_signs" ("patient_id");''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_vitals_visit" ON "vital_signs" ("visit_id");''');
-    await db.execute('''CREATE TABLE IF NOT EXISTS "investigations" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "visit_id" INTEGER NOT NULL,
-  "patient_id" INTEGER NOT NULL,
-  "category" TEXT NOT NULL,
-  "test_name" TEXT NOT NULL,
-  "findings_notes" TEXT,
-  "attachment_path" TEXT,
-  "ordered_date" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "sync_status" TEXT DEFAULT 'pending',
-  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE,
-  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
-);''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_investigations_patient" ON "investigations" ("patient_id");''');
-    await db.execute('''CREATE TABLE IF NOT EXISTS "diagnoses" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "visit_id" INTEGER NOT NULL,
-  "patient_id" INTEGER NOT NULL,
-  "icd_code" TEXT,
-  "diagnosis_name" TEXT NOT NULL,
-  "diagnosis_type" TEXT NOT NULL DEFAULT 'Primary',
-  "notes" TEXT,
-  "sync_status" TEXT DEFAULT 'pending',
-  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE,
-  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
-);''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_diagnoses_patient" ON "diagnoses" ("patient_id");''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_diagnoses_name" ON "diagnoses" ("diagnosis_name");''');
-    await db.execute('''CREATE TABLE IF NOT EXISTS "prescriptions" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "visit_id" INTEGER NOT NULL,
-  "patient_id" INTEGER NOT NULL,
-  "medicine_name" TEXT NOT NULL,
-  "dosage" TEXT NOT NULL,
-  "frequency" TEXT NOT NULL,
-  "duration" TEXT,
-  "instructions" TEXT,
-  "prescribed_date" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "sync_status" TEXT DEFAULT 'pending',
-  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE,
-  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
-);''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_prescriptions_patient" ON "prescriptions" ("patient_id");''');
-    await db.execute('''CREATE TABLE IF NOT EXISTS "referrals" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "visit_id" INTEGER NOT NULL,
-  "patient_id" INTEGER NOT NULL,
-  "referred_to_type" TEXT NOT NULL,
-  "provider_name" TEXT NOT NULL,
-  "reason" TEXT,
-  "referral_date" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "sync_status" TEXT DEFAULT 'pending',
-  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE,
-  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
-);''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_referrals_patient" ON "referrals" ("patient_id");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "bills" (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "bill_number" TEXT NOT NULL UNIQUE,
@@ -378,165 +294,9 @@ class DatabaseHelper {
     return await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
   }
 
-  // === VitalSign CRUD Operations ===
-  Future<int> insertVitalSign(VitalSign vitalSign) async {
-    final db = await instance.database;
-    return await db.insert('vital_signs', vitalSign.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
 
-  Future<List<VitalSign>> getAllVitalSigns() async {
-    final db = await instance.database;
-    final result = await db.query('vital_signs');
-    return result.map((json) => VitalSign.fromMap(json)).toList();
-  }
 
-  Future<VitalSign?> getVitalSignById(int id) async {
-    final db = await instance.database;
-    final maps = await db.query('vital_signs', where: 'id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) {
-      return VitalSign.fromMap(maps.first);
-    } else {
-      return null;
-    }
-  }
 
-  Future<int> updateVitalSign(VitalSign vitalSign) async {
-    final db = await instance.database;
-    return await db.update('vital_signs', vitalSign.toMap(), where: 'id = ?', whereArgs: [vitalSign.id]);
-  }
-
-  Future<int> deleteVitalSign(int id) async {
-    final db = await instance.database;
-    return await db.delete('vital_signs', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // === Investigation CRUD Operations ===
-  Future<int> insertInvestigation(Investigation investigation) async {
-    final db = await instance.database;
-    return await db.insert('investigations', investigation.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Investigation>> getAllInvestigations() async {
-    final db = await instance.database;
-    final result = await db.query('investigations');
-    return result.map((json) => Investigation.fromMap(json)).toList();
-  }
-
-  Future<Investigation?> getInvestigationById(int id) async {
-    final db = await instance.database;
-    final maps = await db.query('investigations', where: 'id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) {
-      return Investigation.fromMap(maps.first);
-    } else {
-      return null;
-    }
-  }
-
-  Future<int> updateInvestigation(Investigation investigation) async {
-    final db = await instance.database;
-    return await db.update('investigations', investigation.toMap(), where: 'id = ?', whereArgs: [investigation.id]);
-  }
-
-  Future<int> deleteInvestigation(int id) async {
-    final db = await instance.database;
-    return await db.delete('investigations', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // === Diagnosis CRUD Operations ===
-  Future<int> insertDiagnosis(Diagnosis diagnosis) async {
-    final db = await instance.database;
-    return await db.insert('diagnoses', diagnosis.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Diagnosis>> getAllDiagnosiss() async {
-    final db = await instance.database;
-    final result = await db.query('diagnoses');
-    return result.map((json) => Diagnosis.fromMap(json)).toList();
-  }
-
-  Future<Diagnosis?> getDiagnosisById(int id) async {
-    final db = await instance.database;
-    final maps = await db.query('diagnoses', where: 'id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) {
-      return Diagnosis.fromMap(maps.first);
-    } else {
-      return null;
-    }
-  }
-
-  Future<int> updateDiagnosis(Diagnosis diagnosis) async {
-    final db = await instance.database;
-    return await db.update('diagnoses', diagnosis.toMap(), where: 'id = ?', whereArgs: [diagnosis.id]);
-  }
-
-  Future<int> deleteDiagnosis(int id) async {
-    final db = await instance.database;
-    return await db.delete('diagnoses', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // === Prescription CRUD Operations ===
-  Future<int> insertPrescription(Prescription prescription) async {
-    final db = await instance.database;
-    return await db.insert('prescriptions', prescription.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Prescription>> getAllPrescriptions() async {
-    final db = await instance.database;
-    final result = await db.query('prescriptions');
-    return result.map((json) => Prescription.fromMap(json)).toList();
-  }
-
-  Future<Prescription?> getPrescriptionById(int id) async {
-    final db = await instance.database;
-    final maps = await db.query('prescriptions', where: 'id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) {
-      return Prescription.fromMap(maps.first);
-    } else {
-      return null;
-    }
-  }
-
-  Future<int> updatePrescription(Prescription prescription) async {
-    final db = await instance.database;
-    return await db.update('prescriptions', prescription.toMap(), where: 'id = ?', whereArgs: [prescription.id]);
-  }
-
-  Future<int> deletePrescription(int id) async {
-    final db = await instance.database;
-    return await db.delete('prescriptions', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // === Referral CRUD Operations ===
-  Future<int> insertReferral(Referral referral) async {
-    final db = await instance.database;
-    return await db.insert('referrals', referral.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Referral>> getAllReferrals() async {
-    final db = await instance.database;
-    final result = await db.query('referrals');
-    return result.map((json) => Referral.fromMap(json)).toList();
-  }
-
-  Future<Referral?> getReferralById(int id) async {
-    final db = await instance.database;
-    final maps = await db.query('referrals', where: 'id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) {
-      return Referral.fromMap(maps.first);
-    } else {
-      return null;
-    }
-  }
-
-  Future<int> updateReferral(Referral referral) async {
-    final db = await instance.database;
-    return await db.update('referrals', referral.toMap(), where: 'id = ?', whereArgs: [referral.id]);
-  }
-
-  Future<int> deleteReferral(int id) async {
-    final db = await instance.database;
-    return await db.delete('referrals', where: 'id = ?', whereArgs: [id]);
-  }
 
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
@@ -692,47 +452,7 @@ class DatabaseHelper {
     return result.map((json) => PatientVisit.fromMap(json)).toList();
   }
 
-  Future<List<VitalSign>> getVitalsForVisit(int visitId) async {
-    final db = await instance.database;
-    final result = await db.query('vital_signs', where: 'visit_id = ?', whereArgs: [visitId]);
-    return result.map((json) => VitalSign.fromMap(json)).toList();
-  }
 
-  Future<List<VitalSign>> getVitalsForPatient(int patientId) async {
-    final db = await instance.database;
-    final result = await db.query('vital_signs', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
-    return result.map((json) => VitalSign.fromMap(json)).toList();
-  }
-
-  Future<List<Investigation>> getInvestigationsForVisit(int visitId) async {
-    final db = await instance.database;
-    final result = await db.query('investigations', where: 'visit_id = ?', whereArgs: [visitId]);
-    return result.map((json) => Investigation.fromMap(json)).toList();
-  }
-
-  Future<List<Diagnosis>> getDiagnosesForVisit(int visitId) async {
-    final db = await instance.database;
-    final result = await db.query('diagnoses', where: 'visit_id = ?', whereArgs: [visitId]);
-    return result.map((json) => Diagnosis.fromMap(json)).toList();
-  }
-
-  Future<List<Diagnosis>> getDiagnosesForPatient(int patientId) async {
-    final db = await instance.database;
-    final result = await db.query('diagnoses', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
-    return result.map((json) => Diagnosis.fromMap(json)).toList();
-  }
-
-  Future<List<Prescription>> getPrescriptionsForVisit(int visitId) async {
-    final db = await instance.database;
-    final result = await db.query('prescriptions', where: 'visit_id = ?', whereArgs: [visitId]);
-    return result.map((json) => Prescription.fromMap(json)).toList();
-  }
-
-  Future<List<Referral>> getReferralsForVisit(int visitId) async {
-    final db = await instance.database;
-    final result = await db.query('referrals', where: 'visit_id = ?', whereArgs: [visitId]);
-    return result.map((json) => Referral.fromMap(json)).toList();
-  }
 
   Future<List<Bill>> getBillsForPatient(int patientId) async {
     final db = await instance.database;
