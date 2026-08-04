@@ -1,5 +1,8 @@
 // AUTO-GENERATED FILE FROM schema.json via setup.py - DO NOT MODIFY DIRECTLY
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
@@ -13,6 +16,7 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('emr.db');
+    await _checkAndSeedIcd10(_database!);
     return _database!;
   }
 
@@ -180,6 +184,9 @@ class DatabaseHelper {
       }
       if (!patientVisitsCols.contains('diagnosis')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "diagnosis" TEXT;');
+      }
+      if (!patientVisitsCols.contains('diagnosis_code')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "diagnosis_code" TEXT;');
       }
       if (!patientVisitsCols.contains('advice')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "advice" TEXT;');
@@ -354,6 +361,7 @@ class DatabaseHelper {
   "systemic_examination" TEXT,
   "investigations" TEXT,
   "diagnosis" TEXT,
+  "diagnosis_code" TEXT,
   "advice" TEXT,
   "referral_to" TEXT,
   "followup_date" TEXT,
@@ -740,8 +748,70 @@ class DatabaseHelper {
     await db.execute('DROP TABLE IF EXISTS "patients";');
     await db.execute('DROP TABLE IF EXISTS "users";');
     await db.execute('DROP TABLE IF EXISTS "roles";');
+    await db.execute('DROP TABLE IF EXISTS "icd10_diagnoses";');
     await _createDB(db, 1);
     await db.execute('PRAGMA foreign_keys = ON;');
+  }
+
+  Future<void> _checkAndSeedIcd10(Database db) async {
+    await db.execute('''CREATE TABLE IF NOT EXISTS "icd10_diagnoses" (
+      "code" TEXT PRIMARY KEY,
+      "name_en" TEXT NOT NULL,
+      "name_id" TEXT
+    );''');
+    await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_code" ON "icd10_diagnoses" ("code");');
+    await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_name" ON "icd10_diagnoses" ("name_en" COLLATE NOCASE);');
+
+    final countResult = await db.rawQuery('SELECT COUNT(*) as cnt FROM icd10_diagnoses');
+    final count = (countResult.first['cnt'] as num?)?.toInt() ?? 0;
+    if (count > 0) return;
+
+    try {
+      final jsonString = await rootBundle.loadString('assets/master_icd_x.json');
+      final List<dynamic> list = json.decode(jsonString);
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        for (final item in list) {
+          batch.insert('icd10_diagnoses', {
+            'code': item['kode_icd'],
+            'name_en': item['nama_icd'],
+            'name_id': item['nama_icd_indo'],
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+        await batch.commit(noResult: true);
+      });
+    } catch (e) {
+      debugPrint('Error seeding ICD-10 data: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> searchIcd10Diagnoses(String query) async {
+    final db = await instance.database;
+    if (query.trim().isEmpty) return [];
+
+    final qLike = '%${query.trim()}%';
+    final qCodeStart = '${query.trim()}%';
+    final qNameStart = '${query.trim()}%';
+    final qExact = query.trim().toLowerCase();
+
+    return await db.rawQuery('''
+      SELECT code, name_en, name_id FROM icd10_diagnoses
+      WHERE code LIKE ? 
+         OR name_en LIKE ?
+         OR name_id LIKE ?
+      ORDER BY 
+        CASE 
+          WHEN LOWER(code) = ? THEN 1
+          WHEN LOWER(code) LIKE ? THEN 2
+          WHEN LOWER(name_en) LIKE ? THEN 3
+          ELSE 4
+        END,
+        code ASC
+      LIMIT 50
+    ''', [
+      qLike, qLike, qLike,
+      qExact, qCodeStart, qNameStart
+    ]);
   }
 
   Future<void> close() async {

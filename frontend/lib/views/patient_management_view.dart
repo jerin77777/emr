@@ -5,6 +5,7 @@ import 'patient_registration_dialog.dart';
 import 'patient_detail_view.dart';
 import 'clinical_consultation_view.dart';
 import 'billing_view.dart';
+import '../main.dart';
 
 class PatientManagementView extends StatefulWidget {
   final User currentUser;
@@ -75,13 +76,18 @@ class _PatientManagementViewState extends State<PatientManagementView> {
   }
 
   void _generateBill(Patient patient) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            BillingView(patient: patient, currentUser: widget.currentUser),
-      ),
-    ).then((_) => _loadPatients());
+    final dashboardState = context.findAncestorStateOfType<DashboardShellState>();
+    if (dashboardState != null) {
+      dashboardState.navigateToSection('billing', patient: patient);
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              BillingView(patient: patient, currentUser: widget.currentUser),
+        ),
+      ).then((_) => _loadPatients());
+    }
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'database/database_helper.dart';
 import 'models/models.dart';
 import 'views/patient_management_view.dart';
+import 'views/billing_dashboard_view.dart';
 
 bool debug = false;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -435,70 +436,219 @@ class _LoginScreenState extends State<LoginScreen> {
 // ============================================================================
 // 2. ADMIN DASHBOARD (User Management & Role Management)
 // ============================================================================
-class AdminDashboard extends StatefulWidget {
+class AdminDashboard extends StatelessWidget {
   final User currentUser;
   const AdminDashboard({super.key, required this.currentUser});
 
   @override
-  State<AdminDashboard> createState() => _AdminDashboardState();
+  Widget build(BuildContext context) {
+    return DashboardShell(currentUser: currentUser);
+  }
 }
 
-class _AdminDashboardState extends State<AdminDashboard>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class DashboardShell extends StatefulWidget {
+  final User currentUser;
+  final Patient? initialPreSelectedPatient;
+  final String? initialSection;
+
+  const DashboardShell({
+    super.key,
+    required this.currentUser,
+    this.initialPreSelectedPatient,
+    this.initialSection,
+  });
+
+  @override
+  State<DashboardShell> createState() => DashboardShellState();
+}
+
+class DashboardShellState extends State<DashboardShell> {
+  late String _activeSection;
+  Patient? _preSelectedPatient;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _activeSection = widget.initialSection ?? 'patients';
+    _preSelectedPatient = widget.initialPreSelectedPatient;
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  void navigateToSection(String section, {Patient? patient}) {
+    setState(() {
+      _activeSection = section;
+      _preSelectedPatient = patient;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
+    final hasBilling = widget.currentUser.role.toLowerCase() == 'admin' || 
+                       widget.currentUser.role.toLowerCase() == 'doctor';
+
+    // Sidebar items
+    final List<Map<String, dynamic>> menuItems = [
+      {'id': 'patients', 'title': 'Patient Directory', 'icon': Icons.people},
+      if (hasBilling) {'id': 'billing', 'title': 'Billing & Invoices', 'icon': Icons.receipt_long},
+      if (isAdmin) {'id': 'users', 'title': 'User Management', 'icon': Icons.manage_accounts},
+      if (isAdmin) {'id': 'roles', 'title': 'Role Management', 'icon': Icons.security},
+    ];
+
+    Widget buildBody() {
+      switch (_activeSection) {
+        case 'patients':
+          return PatientManagementView(currentUser: widget.currentUser);
+        case 'billing':
+          return BillingDashboardView(
+            currentUser: widget.currentUser,
+            preSelectedPatient: _preSelectedPatient,
+          );
+        case 'users':
+          return const UserManagementTab();
+        case 'roles':
+          return const RoleManagementTab();
+        default:
+          return PatientManagementView(currentUser: widget.currentUser);
+      }
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('EMR Admin Portal (${widget.currentUser.fullName})'),
-        backgroundColor: Colors.teal.shade700,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
-            },
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.teal.shade100,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.medical_services),
-              text: 'Patient Directory & EMR',
-            ),
-            Tab(icon: Icon(Icons.people), text: 'User Management'),
-            Tab(icon: Icon(Icons.security), text: 'Role Management'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Row(
         children: [
-          PatientManagementView(currentUser: widget.currentUser),
-          const UserManagementTab(),
-          const RoleManagementTab(),
+          // Left Sidebar Navigation
+          Container(
+            width: 260,
+            color: Colors.teal.shade900,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Sidebar Header
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  color: const Color(0xFF00332C),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.local_hospital, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Clinic EMR',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // User Profile Summary in Sidebar
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Colors.teal.shade800,
+                        foregroundColor: Colors.white,
+                        child: Text(widget.currentUser.fullName[0].toUpperCase()),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.currentUser.fullName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              widget.currentUser.role,
+                              style: TextStyle(color: Colors.teal.shade200, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Colors.white12, height: 1),
+                const SizedBox(height: 8),
+                // Sidebar Menu Items
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: menuItems.length,
+                    itemBuilder: (context, index) {
+                      final item = menuItems[index];
+                      final isSelected = _activeSection == item['id'];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                        child: ListTile(
+                          onTap: () {
+                            setState(() {
+                              _activeSection = item['id'];
+                              _preSelectedPatient = null;
+                            });
+                          },
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          selected: isSelected,
+                          selectedTileColor: Colors.teal.shade800,
+                          selectedColor: Colors.white,
+                          textColor: Colors.teal.shade100,
+                          iconColor: Colors.teal.shade200,
+                          leading: Icon(item['icon']),
+                          title: Text(
+                            item['title'],
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Sidebar Footer - Logout Button
+                const Divider(color: Colors.white12, height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: ListTile(
+                    onTap: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      );
+                    },
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textColor: Colors.red.shade100,
+                    iconColor: Colors.red.shade200,
+                    leading: const Icon(Icons.logout),
+                    title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w500)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Active Main View Content
+          Expanded(
+            child: Scaffold(
+              appBar: AppBar(
+                title: Text(
+                  _activeSection == 'patients'
+                      ? 'Patient Directory & EMR Record'
+                      : _activeSection == 'billing'
+                          ? 'Billing Dashboard & Invoices'
+                          : _activeSection == 'users'
+                              ? 'User & Doctor Management'
+                              : 'Role & Permission Configuration',
+                ),
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.teal.shade900,
+                elevation: 1,
+                shadowColor: Colors.black12,
+              ),
+              body: buildBody(),
+            ),
+          ),
         ],
       ),
     );
@@ -1086,25 +1236,6 @@ class StaffDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${currentUser.role} Workspace (${currentUser.fullName})'),
-        backgroundColor: Colors.teal.shade700,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-      body: PatientManagementView(currentUser: currentUser),
-    );
+    return DashboardShell(currentUser: currentUser);
   }
 }
