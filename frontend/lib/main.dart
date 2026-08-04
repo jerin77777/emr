@@ -5,6 +5,9 @@ import 'database/database_helper.dart';
 import 'models/models.dart';
 import 'views/patient_management_view.dart';
 import 'views/billing_dashboard_view.dart';
+import 'views/consultation_records_view.dart';
+import 'views/settings_backup_view.dart';
+import 'services/sync_service.dart';
 
 bool debug = false;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -15,6 +18,7 @@ void main() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  SyncService.instance.startSyncLoop();
   runApp(const EMRApp());
 }
 
@@ -182,6 +186,203 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkNewInstallation();
+    });
+  }
+
+  Future<void> _checkNewInstallation() async {
+    try {
+      final patients = await DatabaseHelper.instance.getAllPatients();
+      if (patients.isEmpty) {
+        if (!mounted) return;
+        _showInitialSetupDialog();
+      }
+    } catch (_) {}
+  }
+
+  void _showInitialSetupDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('New Installation Detected'),
+          content: const Text(
+            'Do you want to restore your clinic data from the cloud?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Start Fresh'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _showRestoreCredentialsDialog();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal.shade700,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Yes, Restore'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showRestoreCredentialsDialog() {
+    final projController = TextEditingController();
+    final apiController = TextEditingController();
+    final clinicController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isRestoring = false;
+        double progress = 0.0;
+        String statusMessage = '';
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void runRestore() {
+              if (!formKey.currentState!.validate()) return;
+
+              setDialogState(() {
+                isRestoring = true;
+                progress = 0.0;
+                statusMessage = 'Connecting to cloud vault...';
+              });
+
+              SyncService.instance.restoreFromCloud(
+                projectId: projController.text.trim(),
+                apiKey: apiController.text.trim(),
+                clinicId: clinicController.text.trim(),
+                onProgress: (prog, msg) {
+                  setDialogState(() {
+                    progress = prog;
+                    statusMessage = msg;
+                  });
+                },
+              ).then((_) {
+                if (!context.mounted) return;
+                setDialogState(() {
+                  isRestoring = false;
+                });
+                Navigator.pop(context);
+                _showSuccessMessage();
+              }).catchError((err) {
+                if (!context.mounted) return;
+                setDialogState(() {
+                  isRestoring = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Restore Failed: $err'), backgroundColor: Colors.red),
+                );
+              });
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Cloud Vault Credentials'),
+              content: SizedBox(
+                width: 400,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isRestoring) ...[
+                        const Text('Please input your clinic\'s cloud vault settings:'),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: projController,
+                          decoration: const InputDecoration(labelText: 'Firebase Project ID', border: OutlineInputBorder()),
+                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: apiController,
+                          decoration: const InputDecoration(labelText: 'Firebase Web API Key', border: OutlineInputBorder()),
+                          obscureText: true,
+                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: clinicController,
+                          decoration: const InputDecoration(labelText: 'Clinic Identifier Namespace', border: OutlineInputBorder()),
+                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 12),
+                        CircularProgressIndicator(value: progress),
+                        const SizedBox(height: 24),
+                        Text(statusMessage, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(value: progress),
+                        const SizedBox(height: 8),
+                        Text('${(progress * 100).toStringAsFixed(0)}% Complete'),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: isRestoring
+                  ? []
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: runRestore,
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+                        child: const Text('Start Restoration'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSuccessMessage() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Text('Restoration Completed'),
+            ],
+          ),
+          content: const Text(
+            'Your clinic database has been successfully recovered. You can now log in using your doctor or administrator credentials.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+              child: const Text('Continue to Login'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -489,15 +690,19 @@ class DashboardShellState extends State<DashboardShell> {
     // Sidebar items
     final List<Map<String, dynamic>> menuItems = [
       {'id': 'patients', 'title': 'Patient Directory', 'icon': Icons.people},
+      {'id': 'consultations', 'title': 'Consultation Records', 'icon': Icons.history_edu},
       if (hasBilling) {'id': 'billing', 'title': 'Billing & Invoices', 'icon': Icons.receipt_long},
       if (isAdmin) {'id': 'users', 'title': 'User Management', 'icon': Icons.manage_accounts},
       if (isAdmin) {'id': 'roles', 'title': 'Role Management', 'icon': Icons.security},
+      {'id': 'settings', 'title': 'Settings & Backup', 'icon': Icons.settings},
     ];
 
     Widget buildBody() {
       switch (_activeSection) {
         case 'patients':
           return PatientManagementView(currentUser: widget.currentUser);
+        case 'consultations':
+          return ConsultationRecordsView(currentUser: widget.currentUser);
         case 'billing':
           return BillingDashboardView(
             currentUser: widget.currentUser,
@@ -507,6 +712,8 @@ class DashboardShellState extends State<DashboardShell> {
           return const UserManagementTab();
         case 'roles':
           return const RoleManagementTab();
+        case 'settings':
+          return SettingsBackupView(currentUser: widget.currentUser);
         default:
           return PatientManagementView(currentUser: widget.currentUser);
       }
@@ -635,11 +842,15 @@ class DashboardShellState extends State<DashboardShell> {
                 title: Text(
                   _activeSection == 'patients'
                       ? 'Patient Directory & EMR Record'
-                      : _activeSection == 'billing'
-                          ? 'Billing Dashboard & Invoices'
-                          : _activeSection == 'users'
-                              ? 'User & Doctor Management'
-                              : 'Role & Permission Configuration',
+                      : _activeSection == 'consultations'
+                          ? 'Consultation Records Search'
+                          : _activeSection == 'billing'
+                              ? 'Billing Dashboard & Invoices'
+                              : _activeSection == 'users'
+                                  ? 'User & Doctor Management'
+                                  : _activeSection == 'roles'
+                                      ? 'Role & Permission Configuration'
+                                      : 'EMR Cloud Settings & Backups',
                 ),
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.teal.shade900,
