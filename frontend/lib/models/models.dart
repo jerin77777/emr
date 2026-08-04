@@ -281,6 +281,7 @@ class PatientVisit {
   final String? systemicExamination;
   final String? investigations;
   final String? diagnosis;
+  final String? diagnosisCode;
   final String? advice;
   final String? referralTo;
   final String? followupDate;
@@ -304,6 +305,7 @@ class PatientVisit {
     this.systemicExamination,
     this.investigations,
     this.diagnosis,
+    this.diagnosisCode,
     this.advice,
     this.referralTo,
     this.followupDate,
@@ -329,6 +331,7 @@ class PatientVisit {
       systemicExamination: map['systemic_examination'] as String?,
       investigations: map['investigations'] as String?,
       diagnosis: map['diagnosis'] as String?,
+      diagnosisCode: map['diagnosis_code'] as String?,
       advice: map['advice'] as String?,
       referralTo: map['referral_to'] as String?,
       followupDate: map['followup_date'] as String?,
@@ -355,6 +358,7 @@ class PatientVisit {
       'systemic_examination': systemicExamination,
       'investigations': investigations,
       'diagnosis': diagnosis,
+      'diagnosis_code': diagnosisCode,
       'advice': advice,
       'referral_to': referralTo,
       'followup_date': followupDate,
@@ -380,6 +384,7 @@ class PatientVisit {
     String? systemicExamination,
     String? investigations,
     String? diagnosis,
+    String? diagnosisCode,
     String? advice,
     String? referralTo,
     String? followupDate,
@@ -403,6 +408,7 @@ class PatientVisit {
       systemicExamination: systemicExamination ?? this.systemicExamination,
       investigations: investigations ?? this.investigations,
       diagnosis: diagnosis ?? this.diagnosis,
+      diagnosisCode: diagnosisCode ?? this.diagnosisCode,
       advice: advice ?? this.advice,
       referralTo: referralTo ?? this.referralTo,
       followupDate: followupDate ?? this.followupDate,

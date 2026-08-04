@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../models/models.dart';
 import 'clinical_consultation_view.dart';
 import 'billing_view.dart';
+import '../main.dart';
 
 class PatientDetailView extends StatefulWidget {
   final Patient patient;
@@ -56,15 +57,21 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
   }
 
   void _generateBill() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BillingView(
-          patient: widget.patient,
-          currentUser: widget.currentUser,
+    final dashboardState = context.findAncestorStateOfType<DashboardShellState>();
+    if (dashboardState != null) {
+      Navigator.pop(context);
+      dashboardState.navigateToSection('billing', patient: widget.patient);
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BillingView(
+            patient: widget.patient,
+            currentUser: widget.currentUser,
+          ),
         ),
-      ),
-    ).then((_) => _refreshData());
+      ).then((_) => _refreshData());
+    }
   }
 
   @override

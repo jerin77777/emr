@@ -20,6 +20,25 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
 
+  String? _selectedIcdCode;
+  String? _selectedIcdName;
+  final FocusNode _diagnosisFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _diagnosisController.addListener(_onDiagnosisChanged);
+  }
+
+  void _onDiagnosisChanged() {
+    if (_selectedIcdCode != null && _diagnosisController.text != _selectedIcdName) {
+      setState(() {
+        _selectedIcdCode = null;
+        _selectedIcdName = null;
+      });
+    }
+  }
+
   // Controllers for free text clinical headings
   final _chiefComplaintController = TextEditingController();
   final _historyController = TextEditingController();
@@ -50,6 +69,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     _systemicExamController.dispose();
     _investigationsController.dispose();
     _diagnosisController.dispose();
+    _diagnosisFocusNode.dispose();
     _adviceController.dispose();
     _referralToController.dispose();
     _followupDateController.dispose();
@@ -211,6 +231,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         systemicExamination: sysExam,
         investigations: inv,
         diagnosis: diag,
+        diagnosisCode: _selectedIcdCode,
         advice: advice,
         referralTo: referral,
         followupDate: followup,
@@ -428,11 +449,112 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // g. Diagnosis
-                      _buildSectionHeader('g. Diagnosis', Icons.search_off),
-                      _buildFreeTextField(
-                        controller: _diagnosisController,
-                        hintText: 'Enter diagnosis...',
-                        maxLines: 3,
+                      _buildSectionHeader('g. Diagnosis (ICD-10 Search)', Icons.search),
+                      RawAutocomplete<Map<String, dynamic>>(
+                        textEditingController: _diagnosisController,
+                        focusNode: _diagnosisFocusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) async {
+                          if (textEditingValue.text.isEmpty) {
+                            return const Iterable<Map<String, dynamic>>.empty();
+                          }
+                          return await DatabaseHelper.instance.searchIcd10Diagnoses(textEditingValue.text);
+                        },
+                        displayStringForOption: (Map<String, dynamic> option) {
+                          return option['name_en'] ?? '';
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 4.0,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 500,
+                                constraints: const BoxConstraints(maxHeight: 250),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final option = options.elementAt(index);
+                                    final code = option['code'] ?? '';
+                                    final nameEn = option['name_en'] ?? '';
+                                    final nameId = option['name_id'] ?? '';
+                                    return ListTile(
+                                      title: RichText(
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: '$code - ',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.teal.shade700,
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: nameEn,
+                                              style: const TextStyle(color: Colors.black87),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      subtitle: nameId.trim().isNotEmpty
+                                          ? Text(
+                                              nameId,
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                            )
+                                          : null,
+                                      onTap: () => onSelected(option),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: textEditingController,
+                            focusNode: focusNode,
+                            maxLines: null,
+                            decoration: InputDecoration(
+                              hintText: 'Type to search ICD-10 diagnoses, or enter custom diagnosis...',
+                              alignLabelWithHint: true,
+                              border: const OutlineInputBorder(),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: Colors.teal.shade700, width: 2),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey.shade50,
+                              suffixIcon: textEditingController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () {
+                                        setState(() {
+                                          textEditingController.clear();
+                                          _selectedIcdCode = null;
+                                          _selectedIcdName = null;
+                                        });
+                                      },
+                                    )
+                                  : null,
+                            ),
+                          );
+                        },
+                        onSelected: (Map<String, dynamic> selection) {
+                          setState(() {
+                            _selectedIcdCode = selection['code'];
+                            _selectedIcdName = selection['name_en'];
+                            _diagnosisController.text = selection['name_en'] ?? '';
+                          });
+                        },
                       ),
 
                       // h. Advice
