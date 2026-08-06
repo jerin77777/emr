@@ -29,7 +29,7 @@ class EMRApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'EMR Clinic Management System',
+      title: 'Anything EMR',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -211,7 +211,9 @@ class _LoginScreenState extends State<LoginScreen> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text('New Installation Detected'),
           content: const Text(
             'Do you want to restore your clinic data from the cloud?',
@@ -263,36 +265,44 @@ class _LoginScreenState extends State<LoginScreen> {
                 statusMessage = 'Connecting to cloud vault...';
               });
 
-              SyncService.instance.restoreFromCloud(
-                projectId: projController.text.trim(),
-                apiKey: apiController.text.trim(),
-                clinicId: clinicController.text.trim(),
-                onProgress: (prog, msg) {
-                  setDialogState(() {
-                    progress = prog;
-                    statusMessage = msg;
+              SyncService.instance
+                  .restoreFromCloud(
+                    projectId: projController.text.trim(),
+                    apiKey: apiController.text.trim(),
+                    clinicId: clinicController.text.trim(),
+                    onProgress: (prog, msg) {
+                      setDialogState(() {
+                        progress = prog;
+                        statusMessage = msg;
+                      });
+                    },
+                  )
+                  .then((_) {
+                    if (!context.mounted) return;
+                    setDialogState(() {
+                      isRestoring = false;
+                    });
+                    Navigator.pop(context);
+                    _showSuccessMessage();
+                  })
+                  .catchError((err) {
+                    if (!context.mounted) return;
+                    setDialogState(() {
+                      isRestoring = false;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Restore Failed: $err'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
                   });
-                },
-              ).then((_) {
-                if (!context.mounted) return;
-                setDialogState(() {
-                  isRestoring = false;
-                });
-                Navigator.pop(context);
-                _showSuccessMessage();
-              }).catchError((err) {
-                if (!context.mounted) return;
-                setDialogState(() {
-                  isRestoring = false;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Restore Failed: $err'), backgroundColor: Colors.red),
-                );
-              });
             }
 
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: const Text('Cloud Vault Credentials'),
               content: SizedBox(
                 width: 400,
@@ -302,35 +312,55 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (!isRestoring) ...[
-                        const Text('Please input your clinic\'s cloud vault settings:'),
+                        const Text(
+                          'Please input your clinic\'s cloud vault settings:',
+                        ),
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: projController,
-                          decoration: const InputDecoration(labelText: 'Firebase Project ID', border: OutlineInputBorder()),
-                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Firebase Project ID',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) =>
+                              v == null || v.isEmpty ? 'Required' : null,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: apiController,
-                          decoration: const InputDecoration(labelText: 'Firebase Web API Key', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                            labelText: 'Firebase Web API Key',
+                            border: OutlineInputBorder(),
+                          ),
                           obscureText: true,
-                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                          validator: (v) =>
+                              v == null || v.isEmpty ? 'Required' : null,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: clinicController,
-                          decoration: const InputDecoration(labelText: 'Clinic Identifier Namespace', border: OutlineInputBorder()),
-                          validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Clinic Identifier Namespace',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) =>
+                              v == null || v.isEmpty ? 'Required' : null,
                         ),
                       ] else ...[
                         const SizedBox(height: 12),
                         CircularProgressIndicator(value: progress),
                         const SizedBox(height: 24),
-                        Text(statusMessage, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        Text(
+                          statusMessage,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
                         const SizedBox(height: 12),
                         LinearProgressIndicator(value: progress),
                         const SizedBox(height: 8),
-                        Text('${(progress * 100).toStringAsFixed(0)}% Complete'),
+                        Text(
+                          '${(progress * 100).toStringAsFixed(0)}% Complete',
+                        ),
                       ],
                     ],
                   ),
@@ -345,7 +375,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       ElevatedButton(
                         onPressed: runRestore,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal.shade700,
+                          foregroundColor: Colors.white,
+                        ),
                         child: const Text('Start Restoration'),
                       ),
                     ],
@@ -361,7 +394,9 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: const [
               Icon(Icons.check_circle, color: Colors.green, size: 28),
@@ -375,7 +410,10 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal.shade700,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Continue to Login'),
             ),
           ],
@@ -684,16 +722,32 @@ class DashboardShellState extends State<DashboardShell> {
   @override
   Widget build(BuildContext context) {
     final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
-    final hasBilling = widget.currentUser.role.toLowerCase() == 'admin' || 
-                       widget.currentUser.role.toLowerCase() == 'doctor';
+    final hasBilling =
+        widget.currentUser.role.toLowerCase() == 'admin' ||
+        widget.currentUser.role.toLowerCase() == 'doctor';
 
     // Sidebar items
     final List<Map<String, dynamic>> menuItems = [
       {'id': 'patients', 'title': 'Patient Directory', 'icon': Icons.people},
-      {'id': 'consultations', 'title': 'Consultation Records', 'icon': Icons.history_edu},
-      if (hasBilling) {'id': 'billing', 'title': 'Billing & Invoices', 'icon': Icons.receipt_long},
-      if (isAdmin) {'id': 'users', 'title': 'User Management', 'icon': Icons.manage_accounts},
-      if (isAdmin) {'id': 'roles', 'title': 'Role Management', 'icon': Icons.security},
+      {
+        'id': 'consultations',
+        'title': 'Consultation Records',
+        'icon': Icons.history_edu,
+      },
+      if (hasBilling)
+        {
+          'id': 'billing',
+          'title': 'Billing & Invoices',
+          'icon': Icons.receipt_long,
+        },
+      if (isAdmin)
+        {
+          'id': 'users',
+          'title': 'User Management',
+          'icon': Icons.manage_accounts,
+        },
+      if (isAdmin)
+        {'id': 'roles', 'title': 'Role Management', 'icon': Icons.security},
       {'id': 'settings', 'title': 'Settings & Backup', 'icon': Icons.settings},
     ];
 
@@ -731,19 +785,27 @@ class DashboardShellState extends State<DashboardShell> {
               children: [
                 // Sidebar Header
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 24,
+                    horizontal: 16,
+                  ),
                   color: const Color(0xFF00332C),
                   child: Row(
                     children: [
-                      const Icon(Icons.local_hospital, color: Colors.white, size: 28),
+                      const Icon(
+                        Icons.local_hospital,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Clinic EMR',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                         ),
                       ),
                     ],
@@ -757,7 +819,9 @@ class DashboardShellState extends State<DashboardShell> {
                       CircleAvatar(
                         backgroundColor: Colors.teal.shade800,
                         foregroundColor: Colors.white,
-                        child: Text(widget.currentUser.fullName[0].toUpperCase()),
+                        child: Text(
+                          widget.currentUser.fullName[0].toUpperCase(),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -766,13 +830,20 @@ class DashboardShellState extends State<DashboardShell> {
                           children: [
                             Text(
                               widget.currentUser.fullName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               widget.currentUser.role,
-                              style: TextStyle(color: Colors.teal.shade200, fontSize: 11),
+                              style: TextStyle(
+                                color: Colors.teal.shade200,
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
@@ -790,24 +861,34 @@ class DashboardShellState extends State<DashboardShell> {
                       final item = menuItems[index];
                       final isSelected = _activeSection == item['id'];
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                        child: ListTile(
-                          onTap: () {
-                            setState(() {
-                              _activeSection = item['id'];
-                              _preSelectedPatient = null;
-                            });
-                          },
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          selected: isSelected,
-                          selectedTileColor: Colors.teal.shade800,
-                          selectedColor: Colors.white,
-                          textColor: Colors.teal.shade100,
-                          iconColor: Colors.teal.shade200,
-                          leading: Icon(item['icon']),
-                          title: Text(
-                            item['title'],
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0,
+                          vertical: 2.0,
+                        ),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: ListTile(
+                            onTap: () {
+                              setState(() {
+                                _activeSection = item['id'];
+                                _preSelectedPatient = null;
+                              });
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            selected: isSelected,
+                            selectedTileColor: Colors.teal.shade800,
+                            selectedColor: Colors.white,
+                            textColor: Colors.teal.shade100,
+                            iconColor: Colors.teal.shade200,
+                            leading: Icon(item['icon']),
+                            title: Text(
+                              item['title'],
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       );
@@ -818,18 +899,28 @@ class DashboardShellState extends State<DashboardShell> {
                 const Divider(color: Colors.white12, height: 1),
                 Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: ListTile(
-                    onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
-                      );
-                    },
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    textColor: Colors.red.shade100,
-                    iconColor: Colors.red.shade200,
-                    leading: const Icon(Icons.logout),
-                    title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w500)),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginScreen(),
+                          ),
+                        );
+                      },
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      textColor: Colors.red.shade100,
+                      iconColor: Colors.red.shade200,
+                      leading: const Icon(Icons.logout),
+                      title: const Text(
+                        'Logout',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -843,14 +934,14 @@ class DashboardShellState extends State<DashboardShell> {
                   _activeSection == 'patients'
                       ? 'Patient Directory & EMR Record'
                       : _activeSection == 'consultations'
-                          ? 'Consultation Records Search'
-                          : _activeSection == 'billing'
-                              ? 'Billing Dashboard & Invoices'
-                              : _activeSection == 'users'
-                                  ? 'User & Doctor Management'
-                                  : _activeSection == 'roles'
-                                      ? 'Role & Permission Configuration'
-                                      : 'EMR Cloud Settings & Backups',
+                      ? 'Consultation Records Search'
+                      : _activeSection == 'billing'
+                      ? 'Billing Dashboard & Invoices'
+                      : _activeSection == 'users'
+                      ? 'User & Doctor Management'
+                      : _activeSection == 'roles'
+                      ? 'Role & Permission Configuration'
+                      : 'EMR Cloud Settings & Backups',
                 ),
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.teal.shade900,

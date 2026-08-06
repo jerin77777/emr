@@ -285,30 +285,33 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
                               itemBuilder: (context, index) {
                                 final p = _patients[index];
                                 final isSelected = _selectedPatient?.id == p.id;
-                                return ListTile(
-                                  onTap: () => _selectPatient(p),
-                                  selected: isSelected,
-                                  selectedTileColor: Colors.teal.shade50,
-                                  selectedColor: Colors.teal.shade900,
-                                  leading: CircleAvatar(
-                                    backgroundColor: isSelected
-                                        ? Colors.teal
-                                        : (p.gender == 'Male'
-                                            ? Colors.blue.shade100
-                                            : Colors.pink.shade100),
-                                    child: Text(
-                                      p.fullName[0].toUpperCase(),
-                                      style: TextStyle(
-                                        color: isSelected ? Colors.white : Colors.teal.shade900,
-                                        fontWeight: FontWeight.bold,
+                                return Material(
+                                  type: MaterialType.transparency,
+                                  child: ListTile(
+                                    onTap: () => _selectPatient(p),
+                                    selected: isSelected,
+                                    selectedTileColor: Colors.teal.shade50,
+                                    selectedColor: Colors.teal.shade900,
+                                    leading: CircleAvatar(
+                                      backgroundColor: isSelected
+                                          ? Colors.teal
+                                          : (p.gender == 'Male'
+                                              ? Colors.blue.shade100
+                                              : Colors.pink.shade100),
+                                      child: Text(
+                                        p.fullName[0].toUpperCase(),
+                                        style: TextStyle(
+                                          color: isSelected ? Colors.white : Colors.teal.shade900,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
+                                    title: Text(
+                                      p.fullName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: Text('${p.patientCode} • ${p.mobileNumber}'),
                                   ),
-                                  title: Text(
-                                    p.fullName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  subtitle: Text('${p.patientCode} • ${p.mobileNumber}'),
                                 );
                               },
                             ),
