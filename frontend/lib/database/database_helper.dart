@@ -4,12 +4,38 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+
+  // Database change notifier to trigger UI updates
+  static final ValueNotifier<int> changeNotifier = ValueNotifier<int>(0);
+
+  static void notifyDatabaseChanged() {
+    changeNotifier.value++;
+  }
+
+  Future<int> getActivePatientsCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery("SELECT COUNT(*) as cnt FROM patients WHERE is_deleted = 0 OR is_deleted IS NULL");
+    return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> getActivePatientVisitsCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery("SELECT COUNT(*) as cnt FROM patient_visits WHERE is_deleted = 0 OR is_deleted IS NULL");
+    return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> getActiveBillsCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery("SELECT COUNT(*) as cnt FROM bills WHERE is_deleted = 0 OR is_deleted IS NULL");
+    return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
 
   DatabaseHelper._init();
 
@@ -21,12 +47,18 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDB(String filePath) async {
+    String dbPath;
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
+      
+      final supportDir = await getApplicationSupportDirectory();
+      dbPath = supportDir.path;
+      await Directory(dbPath).create(recursive: true);
+    } else {
+      dbPath = await getDatabasesPath();
     }
 
-    final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
     return await openDatabase(
@@ -603,13 +635,21 @@ class DatabaseHelper {
 
   // === Patient CRUD Operations ===
   Future<int> insertPatient(Patient patient) async {
+    if (patient.id == null) {
+      final count = await getActivePatientsCount();
+      if (count >= 10) {
+        throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 patients for this demo version.');
+      }
+    }
     final db = await instance.database;
     final map = patient.toMap();
     map['sync_status'] = 'pending';
     map['updated_at'] = DateTime.now().toIso8601String();
     map['registration_date'] ??= DateTime.now().toIso8601String();
     map['is_deleted'] = 0;
-    return await db.insert('patients', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    final result = await db.insert('patients', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDatabaseChanged();
+    return result;
   }
 
   Future<List<Patient>> getAllPatients() async {
@@ -638,15 +678,23 @@ class DatabaseHelper {
 
   Future<int> deletePatient(int id) async {
     final db = await instance.database;
-    return await db.update('patients', {
+    final result = await db.update('patients', {
       'is_deleted': 1,
       'sync_status': 'pending',
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [id]);
+    notifyDatabaseChanged();
+    return result;
   }
 
   // === PatientVisit CRUD Operations ===
   Future<int> insertPatientVisit(PatientVisit patientVisit) async {
+    if (patientVisit.id == null) {
+      final count = await getActivePatientVisitsCount();
+      if (count >= 10) {
+        throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 consultation visits for this demo version.');
+      }
+    }
     final db = await instance.database;
     final map = patientVisit.toMap();
     map['sync_status'] = 'pending';
@@ -654,7 +702,9 @@ class DatabaseHelper {
     map['created_at'] ??= DateTime.now().toIso8601String();
     map['visit_date'] ??= DateTime.now().toIso8601String();
     map['is_deleted'] = 0;
-    return await db.insert('patient_visits', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    final result = await db.insert('patient_visits', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDatabaseChanged();
+    return result;
   }
 
   Future<List<PatientVisit>> getAllPatientVisits() async {
@@ -683,22 +733,32 @@ class DatabaseHelper {
 
   Future<int> deletePatientVisit(int id) async {
     final db = await instance.database;
-    return await db.update('patient_visits', {
+    final result = await db.update('patient_visits', {
       'is_deleted': 1,
       'sync_status': 'pending',
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [id]);
+    notifyDatabaseChanged();
+    return result;
   }
 
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
+    if (bill.id == null) {
+      final count = await getActiveBillsCount();
+      if (count >= 10) {
+        throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 bills/invoices for this demo version.');
+      }
+    }
     final db = await instance.database;
     final map = bill.toMap();
     map['sync_status'] = 'pending';
     map['updated_at'] = DateTime.now().toIso8601String();
     map['bill_date'] ??= DateTime.now().toIso8601String();
     map['is_deleted'] = 0;
-    return await db.insert('bills', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    final result = await db.insert('bills', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDatabaseChanged();
+    return result;
   }
 
   Future<List<Bill>> getAllBills() async {
@@ -727,11 +787,13 @@ class DatabaseHelper {
 
   Future<int> deleteBill(int id) async {
     final db = await instance.database;
-    return await db.update('bills', {
+    final result = await db.update('bills', {
       'is_deleted': 1,
       'sync_status': 'pending',
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [id]);
+    notifyDatabaseChanged();
+    return result;
   }
 
   // === BillItem CRUD Operations ===
@@ -894,6 +956,7 @@ class DatabaseHelper {
     await db.execute('DROP TABLE IF EXISTS "icd10_diagnoses";');
     await _createDB(db, 1);
     await db.execute('PRAGMA foreign_keys = ON;');
+    notifyDatabaseChanged();
   }
 
   Future<void> saveSetting(String key, String value) async {
