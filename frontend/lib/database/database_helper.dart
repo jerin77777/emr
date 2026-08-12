@@ -1,9 +1,6 @@
-// AUTO-GENERATED FILE FROM schema.json via setup.py - DO NOT MODIFY DIRECTLY
-import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
 
@@ -13,10 +10,27 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
+  static Future<String> getAppDirectoryPath() async {
+    final appSupportDir = await getApplicationSupportDirectory();
+    final emrDir = Directory(join(appSupportDir.path, 'AnythingEMR'));
+    if (!await emrDir.exists()) {
+      await emrDir.create(recursive: true);
+    }
+    return emrDir.path;
+  }
+
+  static Future<String> getReportsDirectoryPath() async {
+    final appDirPath = await getAppDirectoryPath();
+    final reportsDir = Directory(join(appDirPath, 'investigation_reports'));
+    if (!await reportsDir.exists()) {
+      await reportsDir.create(recursive: true);
+    }
+    return reportsDir.path;
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('emr.db');
-    await _checkAndSeedIcd10(_database!);
     return _database!;
   }
 
@@ -26,8 +40,19 @@ class DatabaseHelper {
       databaseFactory = databaseFactoryFfi;
     }
 
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
+    final appDirPath = await getAppDirectoryPath();
+    final path = join(appDirPath, filePath);
+
+    // Auto-migrate database from old temporary location if present
+    try {
+      final oldDbPath = await getDatabasesPath();
+      final oldPath = join(oldDbPath, filePath);
+      final oldFile = File(oldPath);
+      final newFile = File(path);
+      if (await oldFile.exists() && !await newFile.exists()) {
+        await oldFile.copy(path);
+      }
+    } catch (_) {}
 
     return await openDatabase(
       path,
@@ -56,19 +81,6 @@ class DatabaseHelper {
       if (!rolesCols.contains('created_at')) {
         await db.execute('ALTER TABLE "roles" ADD COLUMN "created_at" TEXT;');
       }
-      if (!rolesCols.contains('updated_at')) {
-        await db.execute('ALTER TABLE "roles" ADD COLUMN "updated_at" TEXT;');
-      }
-      if (!rolesCols.contains('last_synced_at')) {
-        await db.execute('ALTER TABLE "roles" ADD COLUMN "last_synced_at" TEXT;');
-      }
-      if (!rolesCols.contains('is_deleted')) {
-        await db.execute('ALTER TABLE "roles" ADD COLUMN "is_deleted" INTEGER DEFAULT 0;');
-      }
-      if (!rolesCols.contains('sync_status')) {
-        await db.execute('ALTER TABLE "roles" ADD COLUMN "sync_status" TEXT DEFAULT \'pending\';');
-      }
-
       final usersInfo = await db.rawQuery("PRAGMA table_info('users')");
       final usersCols = usersInfo.map((c) => c['name'] as String).toSet();
       if (!usersCols.contains('user_uuid')) {
@@ -104,19 +116,6 @@ class DatabaseHelper {
       if (!usersCols.contains('created_at')) {
         await db.execute('ALTER TABLE "users" ADD COLUMN "created_at" TEXT;');
       }
-      if (!usersCols.contains('updated_at')) {
-        await db.execute('ALTER TABLE "users" ADD COLUMN "updated_at" TEXT;');
-      }
-      if (!usersCols.contains('last_synced_at')) {
-        await db.execute('ALTER TABLE "users" ADD COLUMN "last_synced_at" TEXT;');
-      }
-      if (!usersCols.contains('is_deleted')) {
-        await db.execute('ALTER TABLE "users" ADD COLUMN "is_deleted" INTEGER DEFAULT 0;');
-      }
-      if (!usersCols.contains('sync_status')) {
-        await db.execute('ALTER TABLE "users" ADD COLUMN "sync_status" TEXT DEFAULT \'pending\';');
-      }
-
       final patientsInfo = await db.rawQuery("PRAGMA table_info('patients')");
       final patientsCols = patientsInfo.map((c) => c['name'] as String).toSet();
       if (!patientsCols.contains('patient_uuid')) {
@@ -164,13 +163,6 @@ class DatabaseHelper {
       if (!patientsCols.contains('updated_at')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "updated_at" TEXT;');
       }
-      if (!patientsCols.contains('last_synced_at')) {
-        await db.execute('ALTER TABLE "patients" ADD COLUMN "last_synced_at" TEXT;');
-      }
-      if (!patientsCols.contains('is_deleted')) {
-        await db.execute('ALTER TABLE "patients" ADD COLUMN "is_deleted" INTEGER DEFAULT 0;');
-      }
-
       final patientVisitsInfo = await db.rawQuery("PRAGMA table_info('patient_visits')");
       final patientVisitsCols = patientVisitsInfo.map((c) => c['name'] as String).toSet();
       if (!patientVisitsCols.contains('visit_uuid')) {
@@ -236,16 +228,6 @@ class DatabaseHelper {
       if (!patientVisitsCols.contains('created_at')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "created_at" TEXT;');
       }
-      if (!patientVisitsCols.contains('updated_at')) {
-        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "updated_at" TEXT;');
-      }
-      if (!patientVisitsCols.contains('last_synced_at')) {
-        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "last_synced_at" TEXT;');
-      }
-      if (!patientVisitsCols.contains('is_deleted')) {
-        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "is_deleted" INTEGER DEFAULT 0;');
-      }
-
       final billsInfo = await db.rawQuery("PRAGMA table_info('bills')");
       final billsCols = billsInfo.map((c) => c['name'] as String).toSet();
       if (!billsCols.contains('bill_number')) {
@@ -287,16 +269,6 @@ class DatabaseHelper {
       if (!billsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "bills" ADD COLUMN "sync_status" TEXT;');
       }
-      if (!billsCols.contains('updated_at')) {
-        await db.execute('ALTER TABLE "bills" ADD COLUMN "updated_at" TEXT;');
-      }
-      if (!billsCols.contains('last_synced_at')) {
-        await db.execute('ALTER TABLE "bills" ADD COLUMN "last_synced_at" TEXT;');
-      }
-      if (!billsCols.contains('is_deleted')) {
-        await db.execute('ALTER TABLE "bills" ADD COLUMN "is_deleted" INTEGER DEFAULT 0;');
-      }
-
       final billItemsInfo = await db.rawQuery("PRAGMA table_info('bill_items')");
       final billItemsCols = billItemsInfo.map((c) => c['name'] as String).toSet();
       if (!billItemsCols.contains('bill_id')) {
@@ -308,7 +280,6 @@ class DatabaseHelper {
       if (!billItemsCols.contains('amount')) {
         await db.execute('ALTER TABLE "bill_items" ADD COLUMN "amount" REAL;');
       }
-
       final auditLogsInfo = await db.rawQuery("PRAGMA table_info('audit_logs')");
       final auditLogsCols = auditLogsInfo.map((c) => c['name'] as String).toSet();
       if (!auditLogsCols.contains('user_id')) {
@@ -326,7 +297,6 @@ class DatabaseHelper {
       if (!auditLogsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "sync_status" TEXT;');
       }
-
       final syncQueueInfo = await db.rawQuery("PRAGMA table_info('sync_queue')");
       final syncQueueCols = syncQueueInfo.map((c) => c['name'] as String).toSet();
       if (!syncQueueCols.contains('table_name')) {
@@ -350,10 +320,58 @@ class DatabaseHelper {
       if (!syncQueueCols.contains('created_at')) {
         await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "created_at" TEXT;');
       }
-
-      await db.execute('CREATE TABLE IF NOT EXISTS "settings" ("key" TEXT PRIMARY KEY, "value" TEXT);');
-      await db.execute('CREATE INDEX IF NOT EXISTS "idx_visits_doctor" ON "patient_visits" ("doctor_id");');
-      await db.execute('CREATE INDEX IF NOT EXISTS "idx_bills_visit" ON "bills" ("visit_id");');
+      final investigationReportsInfo = await db.rawQuery("PRAGMA table_info('investigation_reports')");
+      final investigationReportsCols = investigationReportsInfo.map((c) => c['name'] as String).toSet();
+      if (!investigationReportsCols.contains('report_uuid')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "report_uuid" TEXT;');
+      }
+      if (!investigationReportsCols.contains('patient_id')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "patient_id" INTEGER;');
+      }
+      if (!investigationReportsCols.contains('visit_id')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "visit_id" INTEGER;');
+      }
+      if (!investigationReportsCols.contains('title')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "title" TEXT;');
+      }
+      if (!investigationReportsCols.contains('category')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "category" TEXT;');
+      }
+      if (!investigationReportsCols.contains('report_date')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "report_date" TEXT;');
+      }
+      if (!investigationReportsCols.contains('file_path')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "file_path" TEXT;');
+      }
+      if (!investigationReportsCols.contains('file_url')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "file_url" TEXT;');
+      }
+      if (!investigationReportsCols.contains('file_name')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "file_name" TEXT;');
+      }
+      if (!investigationReportsCols.contains('file_type')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "file_type" TEXT;');
+      }
+      if (!investigationReportsCols.contains('file_size')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "file_size" INTEGER;');
+      }
+      if (!investigationReportsCols.contains('notes')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "notes" TEXT;');
+      }
+      if (!investigationReportsCols.contains('uploaded_by')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "uploaded_by" INTEGER;');
+      }
+      if (!investigationReportsCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!investigationReportsCols.contains('created_at')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "created_at" TEXT;');
+      }
+      final settingsInfo = await db.rawQuery("PRAGMA table_info('settings')");
+      final settingsCols = settingsInfo.map((c) => c['name'] as String).toSet();
+      if (!settingsCols.contains('value')) {
+        await db.execute('ALTER TABLE "settings" ADD COLUMN "value" TEXT;');
+      }
     } catch (_) {}
   }
 
@@ -363,11 +381,7 @@ class DatabaseHelper {
   "role_name" TEXT NOT NULL UNIQUE,
   "description" TEXT,
   "permissions" TEXT,
-  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TEXT,
-  "last_synced_at" TEXT,
-  "is_deleted" INTEGER DEFAULT 0,
-  "sync_status" TEXT DEFAULT 'pending'
+  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_roles_name" ON "roles" ("role_name");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "users" (
@@ -382,11 +396,7 @@ class DatabaseHelper {
   "email" TEXT,
   "role" TEXT NOT NULL,
   "is_active" INTEGER NOT NULL DEFAULT 1,
-  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TEXT,
-  "last_synced_at" TEXT,
-  "is_deleted" INTEGER DEFAULT 0,
-  "sync_status" TEXT DEFAULT 'pending'
+  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_users_username" ON "users" ("username");''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_users_role" ON "users" ("role");''');
@@ -406,9 +416,7 @@ class DatabaseHelper {
   "referral_doctor" TEXT,
   "registration_date" TEXT DEFAULT CURRENT_TIMESTAMP,
   "sync_status" TEXT DEFAULT 'pending',
-  "updated_at" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "last_synced_at" TEXT,
-  "is_deleted" INTEGER DEFAULT 0
+  "updated_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_patients_code" ON "patients" ("patient_code");''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_patients_name" ON "patients" ("full_name");''');
@@ -436,15 +444,11 @@ class DatabaseHelper {
   "followup_date" TEXT,
   "sync_status" TEXT DEFAULT 'pending',
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TEXT,
-  "last_synced_at" TEXT,
-  "is_deleted" INTEGER DEFAULT 0,
   FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
   FOREIGN KEY ("doctor_id") REFERENCES "users" ("id") ON DELETE SET NULL
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_patient" ON "patient_visits" ("patient_id");''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_date" ON "patient_visits" ("visit_date");''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_doctor" ON "patient_visits" ("doctor_id");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "bills" (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "bill_number" TEXT NOT NULL UNIQUE,
@@ -460,15 +464,11 @@ class DatabaseHelper {
   "payment_method" TEXT,
   "bill_date" TEXT DEFAULT CURRENT_TIMESTAMP,
   "sync_status" TEXT DEFAULT 'pending',
-  "updated_at" TEXT,
-  "last_synced_at" TEXT,
-  "is_deleted" INTEGER DEFAULT 0,
   FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
   FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_bills_patient" ON "bills" ("patient_id");''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_bills_number" ON "bills" ("bill_number");''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_bills_visit" ON "bills" ("visit_id");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "bill_items" (
   "id" INTEGER PRIMARY KEY AUTOINCREMENT,
   "bill_id" INTEGER NOT NULL,
@@ -498,11 +498,34 @@ class DatabaseHelper {
   "error_message" TEXT,
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_sync_status" ON "sync_queue" ("status");''');
+    await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_reports" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "report_uuid" TEXT NOT NULL UNIQUE,
+  "patient_id" INTEGER NOT NULL,
+  "visit_id" INTEGER,
+  "title" TEXT NOT NULL,
+  "category" TEXT,
+  "report_date" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "file_path" TEXT NOT NULL,
+  "file_url" TEXT,
+  "file_name" TEXT,
+  "file_type" TEXT,
+  "file_size" INTEGER,
+  "notes" TEXT,
+  "uploaded_by" INTEGER,
+  "sync_status" TEXT DEFAULT 'pending',
+  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
+  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
+  FOREIGN KEY ("uploaded_by") REFERENCES "users" ("id") ON DELETE SET NULL
+);''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_reports_patient" ON "investigation_reports" ("patient_id");''');
+    await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_inv_reports_uuid" ON "investigation_reports" ("report_uuid");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "settings" (
   "key" TEXT PRIMARY KEY,
   "value" TEXT
 );''');
-    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_sync_status" ON "sync_queue" ("status");''');
     await _seedInitialData(db);
   }
 
@@ -516,23 +539,18 @@ class DatabaseHelper {
   // === Role CRUD Operations ===
   Future<int> insertRole(Role role) async {
     final db = await instance.database;
-    final map = role.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    map['created_at'] ??= DateTime.now().toIso8601String();
-    map['is_deleted'] = 0;
-    return await db.insert('roles', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('roles', role.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Role>> getAllRoles() async {
     final db = await instance.database;
-    final result = await db.query('roles', where: 'is_deleted = 0 OR is_deleted IS NULL');
+    final result = await db.query('roles');
     return result.map((json) => Role.fromMap(json)).toList();
   }
 
   Future<Role?> getRoleById(int id) async {
     final db = await instance.database;
-    final maps = await db.query('roles', where: 'id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [id]);
+    final maps = await db.query('roles', where: 'id = ?', whereArgs: [id]);
     if (maps.isNotEmpty) {
       return Role.fromMap(maps.first);
     } else {
@@ -542,41 +560,29 @@ class DatabaseHelper {
 
   Future<int> updateRole(Role role) async {
     final db = await instance.database;
-    final map = role.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('roles', map, where: 'id = ?', whereArgs: [role.id]);
+    return await db.update('roles', role.toMap(), where: 'id = ?', whereArgs: [role.id]);
   }
 
   Future<int> deleteRole(int id) async {
     final db = await instance.database;
-    return await db.update('roles', {
-      'is_deleted': 1,
-      'sync_status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [id]);
+    return await db.delete('roles', where: 'id = ?', whereArgs: [id]);
   }
 
   // === User CRUD Operations ===
   Future<int> insertUser(User user) async {
     final db = await instance.database;
-    final map = user.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    map['created_at'] ??= DateTime.now().toIso8601String();
-    map['is_deleted'] = 0;
-    return await db.insert('users', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('users', user.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<User>> getAllUsers() async {
     final db = await instance.database;
-    final result = await db.query('users', where: 'is_deleted = 0 OR is_deleted IS NULL');
+    final result = await db.query('users');
     return result.map((json) => User.fromMap(json)).toList();
   }
 
   Future<User?> getUserById(int id) async {
     final db = await instance.database;
-    final maps = await db.query('users', where: 'id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [id]);
+    final maps = await db.query('users', where: 'id = ?', whereArgs: [id]);
     if (maps.isNotEmpty) {
       return User.fromMap(maps.first);
     } else {
@@ -586,41 +592,29 @@ class DatabaseHelper {
 
   Future<int> updateUser(User user) async {
     final db = await instance.database;
-    final map = user.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('users', map, where: 'id = ?', whereArgs: [user.id]);
+    return await db.update('users', user.toMap(), where: 'id = ?', whereArgs: [user.id]);
   }
 
   Future<int> deleteUser(int id) async {
     final db = await instance.database;
-    return await db.update('users', {
-      'is_deleted': 1,
-      'sync_status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [id]);
+    return await db.delete('users', where: 'id = ?', whereArgs: [id]);
   }
 
   // === Patient CRUD Operations ===
   Future<int> insertPatient(Patient patient) async {
     final db = await instance.database;
-    final map = patient.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    map['registration_date'] ??= DateTime.now().toIso8601String();
-    map['is_deleted'] = 0;
-    return await db.insert('patients', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('patients', patient.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Patient>> getAllPatients() async {
     final db = await instance.database;
-    final result = await db.query('patients', where: 'is_deleted = 0 OR is_deleted IS NULL');
+    final result = await db.query('patients');
     return result.map((json) => Patient.fromMap(json)).toList();
   }
 
   Future<Patient?> getPatientById(int id) async {
     final db = await instance.database;
-    final maps = await db.query('patients', where: 'id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [id]);
+    final maps = await db.query('patients', where: 'id = ?', whereArgs: [id]);
     if (maps.isNotEmpty) {
       return Patient.fromMap(maps.first);
     } else {
@@ -630,42 +624,29 @@ class DatabaseHelper {
 
   Future<int> updatePatient(Patient patient) async {
     final db = await instance.database;
-    final map = patient.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('patients', map, where: 'id = ?', whereArgs: [patient.id]);
+    return await db.update('patients', patient.toMap(), where: 'id = ?', whereArgs: [patient.id]);
   }
 
   Future<int> deletePatient(int id) async {
     final db = await instance.database;
-    return await db.update('patients', {
-      'is_deleted': 1,
-      'sync_status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [id]);
+    return await db.delete('patients', where: 'id = ?', whereArgs: [id]);
   }
 
   // === PatientVisit CRUD Operations ===
   Future<int> insertPatientVisit(PatientVisit patientVisit) async {
     final db = await instance.database;
-    final map = patientVisit.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    map['created_at'] ??= DateTime.now().toIso8601String();
-    map['visit_date'] ??= DateTime.now().toIso8601String();
-    map['is_deleted'] = 0;
-    return await db.insert('patient_visits', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('patient_visits', patientVisit.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<PatientVisit>> getAllPatientVisits() async {
     final db = await instance.database;
-    final result = await db.query('patient_visits', where: 'is_deleted = 0 OR is_deleted IS NULL');
+    final result = await db.query('patient_visits');
     return result.map((json) => PatientVisit.fromMap(json)).toList();
   }
 
   Future<PatientVisit?> getPatientVisitById(int id) async {
     final db = await instance.database;
-    final maps = await db.query('patient_visits', where: 'id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [id]);
+    final maps = await db.query('patient_visits', where: 'id = ?', whereArgs: [id]);
     if (maps.isNotEmpty) {
       return PatientVisit.fromMap(maps.first);
     } else {
@@ -675,41 +656,29 @@ class DatabaseHelper {
 
   Future<int> updatePatientVisit(PatientVisit patientVisit) async {
     final db = await instance.database;
-    final map = patientVisit.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('patient_visits', map, where: 'id = ?', whereArgs: [patientVisit.id]);
+    return await db.update('patient_visits', patientVisit.toMap(), where: 'id = ?', whereArgs: [patientVisit.id]);
   }
 
   Future<int> deletePatientVisit(int id) async {
     final db = await instance.database;
-    return await db.update('patient_visits', {
-      'is_deleted': 1,
-      'sync_status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [id]);
+    return await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
   }
 
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
     final db = await instance.database;
-    final map = bill.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    map['bill_date'] ??= DateTime.now().toIso8601String();
-    map['is_deleted'] = 0;
-    return await db.insert('bills', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('bills', bill.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Bill>> getAllBills() async {
     final db = await instance.database;
-    final result = await db.query('bills', where: 'is_deleted = 0 OR is_deleted IS NULL');
+    final result = await db.query('bills');
     return result.map((json) => Bill.fromMap(json)).toList();
   }
 
   Future<Bill?> getBillById(int id) async {
     final db = await instance.database;
-    final maps = await db.query('bills', where: 'id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [id]);
+    final maps = await db.query('bills', where: 'id = ?', whereArgs: [id]);
     if (maps.isNotEmpty) {
       return Bill.fromMap(maps.first);
     } else {
@@ -719,19 +688,12 @@ class DatabaseHelper {
 
   Future<int> updateBill(Bill bill) async {
     final db = await instance.database;
-    final map = bill.toMap();
-    map['sync_status'] = 'pending';
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('bills', map, where: 'id = ?', whereArgs: [bill.id]);
+    return await db.update('bills', bill.toMap(), where: 'id = ?', whereArgs: [bill.id]);
   }
 
   Future<int> deleteBill(int id) async {
     final db = await instance.database;
-    return await db.update('bills', {
-      'is_deleted': 1,
-      'sync_status': 'pending',
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [id]);
+    return await db.delete('bills', where: 'id = ?', whereArgs: [id]);
   }
 
   // === BillItem CRUD Operations ===
@@ -830,21 +792,84 @@ class DatabaseHelper {
     return await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
   }
 
+  // === InvestigationReport CRUD Operations ===
+  Future<int> insertInvestigationReport(InvestigationReport investigationReport) async {
+    final db = await instance.database;
+    return await db.insert('investigation_reports', investigationReport.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<InvestigationReport>> getAllInvestigationReports() async {
+    final db = await instance.database;
+    final result = await db.query('investigation_reports');
+    return result.map((json) => InvestigationReport.fromMap(json)).toList();
+  }
+
+  Future<InvestigationReport?> getInvestigationReportById(int id) async {
+    final db = await instance.database;
+    final maps = await db.query('investigation_reports', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      return InvestigationReport.fromMap(maps.first);
+    } else {
+      return null;
+    }
+  }
+
+  Future<int> updateInvestigationReport(InvestigationReport investigationReport) async {
+    final db = await instance.database;
+    return await db.update('investigation_reports', investigationReport.toMap(), where: 'id = ?', whereArgs: [investigationReport.id]);
+  }
+
+  Future<int> deleteInvestigationReport(int id) async {
+    final db = await instance.database;
+    return await db.delete('investigation_reports', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // === Setting CRUD Operations ===
+  Future<int> insertSetting(Setting setting) async {
+    final db = await instance.database;
+    return await db.insert('settings', setting.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Setting>> getAllSettings() async {
+    final db = await instance.database;
+    final result = await db.query('settings');
+    return result.map((json) => Setting.fromMap(json)).toList();
+  }
+
+  Future<Setting?> getSettingByKey(String key) async {
+    final db = await instance.database;
+    final maps = await db.query('settings', where: 'key = ?', whereArgs: [key]);
+    if (maps.isNotEmpty) {
+      return Setting.fromMap(maps.first);
+    } else {
+      return null;
+    }
+  }
+
+  Future<int> updateSetting(Setting setting) async {
+    final db = await instance.database;
+    return await db.update('settings', setting.toMap(), where: 'key = ?', whereArgs: [setting.key]);
+  }
+
+  Future<int> deleteSetting(String key) async {
+    final db = await instance.database;
+    return await db.delete('settings', where: 'key = ?', whereArgs: [key]);
+  }
+
   // === Custom EMR Specialized Queries ===
   Future<List<Patient>> searchPatients(String query) async {
     final db = await instance.database;
     if (query.trim().isEmpty) {
-      final result = await db.query('patients', where: 'is_deleted = 0 OR is_deleted IS NULL', orderBy: 'id DESC');
+      final result = await db.query('patients', orderBy: 'id DESC');
       return result.map((json) => Patient.fromMap(json)).toList();
     }
     final q = '%${query.trim().toLowerCase()}%';
     final result = await db.rawQuery('''
       SELECT * FROM patients 
-      WHERE (is_deleted = 0 OR is_deleted IS NULL)
-        AND (LOWER(full_name) LIKE ? 
-          OR LOWER(patient_code) LIKE ? 
-          OR LOWER(mobile_number) LIKE ? 
-          OR LOWER(referral_doctor) LIKE ?)
+      WHERE LOWER(full_name) LIKE ? 
+         OR LOWER(patient_code) LIKE ? 
+         OR LOWER(mobile_number) LIKE ? 
+         OR LOWER(referral_doctor) LIKE ?
       ORDER BY id DESC
     ''', [q, q, q, q]);
     return result.map((json) => Patient.fromMap(json)).toList();
@@ -852,14 +877,26 @@ class DatabaseHelper {
 
   Future<List<PatientVisit>> getVisitsForPatient(int patientId) async {
     final db = await instance.database;
-    final result = await db.query('patient_visits', where: 'patient_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [patientId], orderBy: 'id DESC');
+    final result = await db.query('patient_visits', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
     return result.map((json) => PatientVisit.fromMap(json)).toList();
   }
 
   Future<List<Bill>> getBillsForPatient(int patientId) async {
     final db = await instance.database;
-    final result = await db.query('bills', where: 'patient_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)', whereArgs: [patientId], orderBy: 'id DESC');
+    final result = await db.query('bills', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
     return result.map((json) => Bill.fromMap(json)).toList();
+  }
+
+  Future<List<BillItem>> getBillItemsForBill(int billId) async {
+    final db = await instance.database;
+    final result = await db.query('bill_items', where: 'bill_id = ?', whereArgs: [billId]);
+    return result.map((json) => BillItem.fromMap(json)).toList();
+  }
+
+  Future<List<InvestigationReport>> getInvestigationReportsForPatient(int patientId) async {
+    final db = await instance.database;
+    final result = await db.query('investigation_reports', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
+    return result.map((json) => InvestigationReport.fromMap(json)).toList();
   }
 
   Future<String> generateNextPatientCode() async {
@@ -880,22 +917,6 @@ class DatabaseHelper {
     return 'INV-$year-${nextId.toString().padLeft(4, '0')}';
   }
 
-  Future<void> resetAndSeedDatabase() async {
-    final db = await instance.database;
-    await db.execute('PRAGMA foreign_keys = OFF;');
-    await db.execute('DROP TABLE IF EXISTS "sync_queue";');
-    await db.execute('DROP TABLE IF EXISTS "audit_logs";');
-    await db.execute('DROP TABLE IF EXISTS "bill_items";');
-    await db.execute('DROP TABLE IF EXISTS "bills";');
-    await db.execute('DROP TABLE IF EXISTS "patient_visits";');
-    await db.execute('DROP TABLE IF EXISTS "patients";');
-    await db.execute('DROP TABLE IF EXISTS "users";');
-    await db.execute('DROP TABLE IF EXISTS "roles";');
-    await db.execute('DROP TABLE IF EXISTS "icd10_diagnoses";');
-    await _createDB(db, 1);
-    await db.execute('PRAGMA foreign_keys = ON;');
-  }
-
   Future<void> saveSetting(String key, String value) async {
     final db = await instance.database;
     await db.insert('settings', {'key': key, 'value': value}, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -908,38 +929,6 @@ class DatabaseHelper {
       return maps.first['value'] as String?;
     }
     return null;
-  }
-
-  Future<void> _checkAndSeedIcd10(Database db) async {
-    await db.execute('''CREATE TABLE IF NOT EXISTS "icd10_diagnoses" (
-      "code" TEXT PRIMARY KEY,
-      "name_en" TEXT NOT NULL,
-      "name_id" TEXT
-    );''');
-    await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_code" ON "icd10_diagnoses" ("code");');
-    await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_name" ON "icd10_diagnoses" ("name_en" COLLATE NOCASE);');
-
-    final countResult = await db.rawQuery('SELECT COUNT(*) as cnt FROM icd10_diagnoses');
-    final count = (countResult.first['cnt'] as num?)?.toInt() ?? 0;
-    if (count > 0) return;
-
-    try {
-      final jsonString = await rootBundle.loadString('assets/master_icd_x.json');
-      final List<dynamic> list = json.decode(jsonString);
-      await db.transaction((txn) async {
-        final batch = txn.batch();
-        for (final item in list) {
-          batch.insert('icd10_diagnoses', {
-            'code': item['kode_icd'],
-            'name_en': item['nama_icd'],
-            'name_id': item['nama_icd_indo'],
-          }, conflictAlgorithm: ConflictAlgorithm.ignore);
-        }
-        await batch.commit(noResult: true);
-      });
-    } catch (e) {
-      debugPrint('Error seeding ICD-10 data: $e');
-    }
   }
 
   Future<List<Map<String, dynamic>>> searchIcd10Diagnoses(String query) async {
@@ -982,7 +971,7 @@ class DatabaseHelper {
   }) async {
     final db = await instance.database;
     final List<dynamic> whereArgs = [];
-    String whereClause = 'v.is_deleted = 0 OR v.is_deleted IS NULL';
+    String whereClause = '1 = 1';
 
     if (query != null && query.trim().isNotEmpty) {
       final q = '%${query.trim().toLowerCase()}%';
@@ -1031,7 +1020,7 @@ class DatabaseHelper {
       FROM patient_visits v
       JOIN patients p ON v.patient_id = p.id
       LEFT JOIN users u ON v.doctor_id = u.id
-      LEFT JOIN bills b ON v.id = b.visit_id AND (b.is_deleted = 0 OR b.is_deleted IS NULL)
+      LEFT JOIN bills b ON v.id = b.visit_id
       WHERE $whereClause
       ORDER BY v.visit_date DESC, v.id DESC
       LIMIT ? OFFSET ?
@@ -1050,7 +1039,7 @@ class DatabaseHelper {
   }) async {
     final db = await instance.database;
     final List<dynamic> whereArgs = [];
-    String whereClause = 'v.is_deleted = 0 OR v.is_deleted IS NULL';
+    String whereClause = '1 = 1';
 
     if (query != null && query.trim().isNotEmpty) {
       final q = '%${query.trim().toLowerCase()}%';
@@ -1092,12 +1081,29 @@ class DatabaseHelper {
       FROM patient_visits v
       JOIN patients p ON v.patient_id = p.id
       LEFT JOIN users u ON v.doctor_id = u.id
-      LEFT JOIN bills b ON v.id = b.visit_id AND (b.is_deleted = 0 OR b.is_deleted IS NULL)
+      LEFT JOIN bills b ON v.id = b.visit_id
       WHERE $whereClause
     ''';
     
     final result = await db.rawQuery(sql, whereArgs);
     return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> resetAndSeedDatabase() async {
+    final db = await instance.database;
+    await db.execute('PRAGMA foreign_keys = OFF;');
+    await db.execute('DROP TABLE IF EXISTS "settings";');
+    await db.execute('DROP TABLE IF EXISTS "investigation_reports";');
+    await db.execute('DROP TABLE IF EXISTS "sync_queue";');
+    await db.execute('DROP TABLE IF EXISTS "audit_logs";');
+    await db.execute('DROP TABLE IF EXISTS "bill_items";');
+    await db.execute('DROP TABLE IF EXISTS "bills";');
+    await db.execute('DROP TABLE IF EXISTS "patient_visits";');
+    await db.execute('DROP TABLE IF EXISTS "patients";');
+    await db.execute('DROP TABLE IF EXISTS "users";');
+    await db.execute('DROP TABLE IF EXISTS "roles";');
+    await _createDB(db, 1);
+    await db.execute('PRAGMA foreign_keys = ON;');
   }
 
   Future<void> close() async {

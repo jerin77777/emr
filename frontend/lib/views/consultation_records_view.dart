@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../widgets/common_widgets.dart';
 
 class ConsultationRecordsView extends StatefulWidget {
   final User currentUser;
@@ -139,11 +139,13 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
     showDialog(
       context: context,
       builder: (context) {
-        final vitalsList = <String>[];
-        if (record['vitals_bp']?.isNotEmpty == true) vitalsList.add('BP: ${record['vitals_bp']}');
-        if (record['vitals_pulse']?.isNotEmpty == true) vitalsList.add('Pulse: ${record['vitals_pulse']}');
-        if (record['vitals_temp']?.isNotEmpty == true) vitalsList.add('Temp: ${record['vitals_temp']}');
-        if (record['vitals_saturation']?.isNotEmpty == true) vitalsList.add('SPO2: ${record['vitals_saturation']}');
+        final formattedVitals = VitalsFormatter.formatAll(
+          bp: record['vitals_bp'],
+          pulse: record['vitals_pulse'],
+          temp: record['vitals_temp'],
+          saturation: record['vitals_saturation'],
+          includePlaceholders: true,
+        );
 
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -192,8 +194,7 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
                     _detailField('Chief Complaint', record['chief_complaint']),
                   if (record['history']?.isNotEmpty == true)
                     _detailField('History', record['history']),
-                  if (vitalsList.isNotEmpty)
-                    _detailField('Vitals Signs', vitalsList.join(' | ')),
+                  _detailField('Vital Signs', formattedVitals),
                   if (record['diagnosis']?.isNotEmpty == true)
                     _detailField('Diagnosis', "${record['diagnosis']}${record['diagnosis_code'] != null ? ' (ICD-10: ${record['diagnosis_code']})' : ''}"),
                   if (record['advice']?.isNotEmpty == true)
@@ -231,118 +232,22 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
   Widget _detailField(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: CrossAxisAlignment.start == CrossAxisAlignment.start
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 12)),
-                const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 14)),
-                const SizedBox(height: 6),
-              ],
-            )
-          : const SizedBox.shrink(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 12)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 14)),
+          const SizedBox(height: 6),
+        ],
+      ),
     );
   }
 
   void _printConsultation(Map<String, dynamic> record) {
-    final vitalsList = <String>[];
-    if (record['vitals_bp']?.isNotEmpty == true) vitalsList.add('BP: ${record['vitals_bp']}');
-    if (record['vitals_pulse']?.isNotEmpty == true) vitalsList.add('Pulse: ${record['vitals_pulse']}');
-    if (record['vitals_temp']?.isNotEmpty == true) vitalsList.add('Temp: ${record['vitals_temp']}');
-    if (record['vitals_saturation']?.isNotEmpty == true) vitalsList.add('SPO2: ${record['vitals_saturation']}');
-
-    final printContent = '''
-======================================================
-                  CLINIC VISIT RECORD
-======================================================
-Patient Name  : ${record['patient_name']}
-Patient Code  : ${record['patient_code']}
-Mobile Number : ${record['patient_mobile']}
-Visit Date    : ${record['visit_date'] ?? "N/A"}
-Visit UUID    : ${record['visit_uuid']}
-Consultant    : ${record['doctor_name'] ?? "N/A"}
-------------------------------------------------------
-CHIEF COMPLAINT:
-${record['chief_complaint'] ?? "None documented"}
-
-HISTORY:
-${record['history'] ?? "None documented"}
-
-VITALS:
-${vitalsList.isEmpty ? "None documented" : vitalsList.join(' | ')}
-
-DIAGNOSIS:
-${record['diagnosis'] ?? "None documented"} ${record['diagnosis_code'] != null ? '(${record['diagnosis_code']})' : ''}
-
-ADVICE & PRESCRIPTION:
-${record['advice'] ?? "None documented"}
-
-FOLLOW-UP DATE:
-${record['followup_date'] ?? "None"}
-------------------------------------------------------
-Generated via Clinic EMR - Cloud Synced Backup
-======================================================
-''';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Consultation Print Preview'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('This document is formatted and ready for printing:'),
-              const SizedBox(height: 12),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 300),
-                width: 500,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    printContent,
-                    style: const TextStyle(fontFamily: 'Courier', fontSize: 11),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton.icon(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: printContent));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Consultation text copied to clipboard!')),
-                );
-              },
-              icon: const Icon(Icons.copy),
-              label: const Text('Copy Text'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('PDF layout generated! Sending job to printer...'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
-              icon: const Icon(Icons.print),
-              label: const Text('Simulate Print'),
-            ),
-          ],
-        );
-      },
+    ConsultationPrintPreviewDialog.show(
+      context,
+      dialog: ConsultationPrintPreviewDialog.fromMap(record: record),
     );
   }
 

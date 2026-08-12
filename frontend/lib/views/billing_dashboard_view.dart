@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../widgets/common_widgets.dart';
 
 class BillingDashboardView extends StatefulWidget {
   final User currentUser;
@@ -216,6 +217,14 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
         SnackBar(
           content: Text('Invoice $_billNumber generated successfully!'),
           backgroundColor: Colors.green,
+        ),
+      );
+      showDialog(
+        context: context,
+        builder: (ctx) => BillPrintPreviewDialog(
+          bill: bill,
+          patient: _selectedPatient!,
+          items: _lineItems.map((e) => BillItem(billId: billId, itemDescription: e['description'], amount: e['amount'])).toList(),
         ),
       );
       // Refresh details
@@ -490,11 +499,7 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
     }
 
     final latestVisit = _visits.first;
-    final vitalsList = <String>[];
-    if (latestVisit.vitalsBp?.isNotEmpty == true) vitalsList.add('BP: ${latestVisit.vitalsBp}');
-    if (latestVisit.vitalsPulse?.isNotEmpty == true) vitalsList.add('HR: ${latestVisit.vitalsPulse}');
-    if (latestVisit.vitalsTemp?.isNotEmpty == true) vitalsList.add('Temp: ${latestVisit.vitalsTemp}');
-    if (latestVisit.vitalsSaturation?.isNotEmpty == true) vitalsList.add('SPO2: ${latestVisit.vitalsSaturation}');
+    final vitalsText = latestVisit.formattedVitals(includePlaceholders: true);
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -521,8 +526,7 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
             _detailRow('Diagnosis', latestVisit.diagnosis ?? 'None'),
             if (latestVisit.diagnosisCode?.isNotEmpty == true)
               _detailRow('ICD-10 Code', latestVisit.diagnosisCode!),
-            if (vitalsList.isNotEmpty)
-              _detailRow('Vitals', vitalsList.join(' | ')),
+            _detailRow('Vitals', vitalsText),
             _detailRow('Advice', latestVisit.advice ?? 'None'),
           ],
         ),
@@ -595,34 +599,57 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
                 final status = bill.paymentStatus ?? 'Pending';
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6.0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        status == 'Paid' ? Icons.check_circle : Icons.pending,
-                        color: status == 'Paid' ? Colors.green : Colors.amber.shade800,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(bill.billNumber, style: const TextStyle(fontWeight: FontWeight.w500)),
-                      const Spacer(),
-                      Text('₹${bill.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: status == 'Paid' ? Colors.green.shade50 : Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          status,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: status == 'Paid' ? Colors.green.shade900 : Colors.amber.shade900,
-                            fontWeight: FontWeight.bold,
+                  child: InkWell(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => BillPrintPreviewDialog(bill: bill, patient: _selectedPatient!),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            status == 'Paid' ? Icons.check_circle : Icons.pending,
+                            color: status == 'Paid' ? Colors.green : Colors.amber.shade800,
+                            size: 18,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Text(bill.billNumber, style: const TextStyle(fontWeight: FontWeight.w500)),
+                          const Spacer(),
+                          Text('₹${bill.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: status == 'Paid' ? Colors.green.shade50 : Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: status == 'Paid' ? Colors.green.shade900 : Colors.amber.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(Icons.print, size: 18, color: Colors.teal),
+                            tooltip: 'Print Invoice',
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => BillPrintPreviewDialog(bill: bill, patient: _selectedPatient!),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },

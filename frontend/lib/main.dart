@@ -9,7 +9,7 @@ import 'views/consultation_records_view.dart';
 import 'views/settings_backup_view.dart';
 import 'services/sync_service.dart';
 
-bool debug = false;
+bool debug = true;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {

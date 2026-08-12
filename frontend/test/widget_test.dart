@@ -5,26 +5,28 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:frontend/main.dart';
+import 'package:frontend/models/models.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const EMRApp());
+  test('VitalsFormatter formats values with units correctly', () {
+    expect(VitalsFormatter.formatBp('120/80'), '120/80 mmHg');
+    expect(VitalsFormatter.formatBp('120/80 mmHg'), '120/80 mmHg');
+    expect(VitalsFormatter.formatPulse('72'), '72 bpm');
+    expect(VitalsFormatter.formatPulse('72 bpm'), '72 bpm');
+    expect(VitalsFormatter.formatTemp('98.6'), '98.6 °F');
+    expect(VitalsFormatter.formatTemp('37'), '37 °C');
+    expect(VitalsFormatter.formatSaturation('98'), '98%');
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  test('VitalsFormatter generates placeholders when values are missing', () {
+    final formatted = VitalsFormatter.formatAll(
+      bp: null,
+      pulse: '',
+      temp: null,
+      saturation: '',
+      includePlaceholders: true,
+    );
+    expect(formatted, 'BP: ___ mmHg | Pulse: ___ bpm | Temp: ___ °C/°F | SPO2: ___ %');
   });
 }

@@ -99,6 +99,9 @@ class SyncService {
       // 5. Sync Bills (with nested line items)
       await _syncBillsTable(db, httpClient, projectId, apiKey, clinicId);
 
+      // 6. Sync Investigation Reports (with Firebase Storage bucket upload)
+      await _syncInvestigationReportsTable(db, httpClient, projectId, apiKey, clinicId);
+
       httpClient.close();
 
       // Update backup metadata
@@ -240,6 +243,111 @@ class SyncService {
         throw Exception('HTTP ${response.statusCode}: $body');
       }
     }
+  }
+
+  Future<void> _syncInvestigationReportsTable(
+    Database db,
+    HttpClient httpClient,
+    String projectId,
+    String apiKey,
+    String clinicId,
+  ) async {
+    try {
+      final pendingRows = await db.query('investigation_reports', where: "sync_status != 'synced' OR sync_status IS NULL", limit: 10);
+      
+      for (final row in pendingRows) {
+        final docId = row['id'].toString();
+        final payload = Map<String, dynamic>.from(row);
+        payload.remove('sync_status');
+
+        String? fileUrl = row['file_url'] as String?;
+        final localFilePath = row['file_path'] as String?;
+
+        if ((fileUrl == null || fileUrl.isEmpty) && localFilePath != null && localFilePath.isNotEmpty) {
+          final localFile = File(localFilePath);
+          if (await localFile.exists()) {
+            final uuid = row['report_uuid'] ?? 'rep-${row['id']}';
+            final fname = row['file_name'] ?? 'document';
+            final remoteName = 'investigations/${uuid}_$fname';
+            final uploadedUrl = await uploadFileToFirebaseBucket(
+              file: localFile,
+              projectId: projectId,
+              apiKey: apiKey,
+              remoteName: remoteName,
+            );
+            if (uploadedUrl != null) {
+              fileUrl = uploadedUrl;
+              payload['file_url'] = uploadedUrl;
+              await db.update('investigation_reports', {'file_url': uploadedUrl}, where: 'id = ?', whereArgs: [row['id']]);
+            }
+          }
+        }
+
+        final url = 'https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/${clinicId}_investigation_reports/$docId?key=$apiKey';
+        final request = await httpClient.patchUrl(Uri.parse(url));
+        request.headers.contentType = ContentType.json;
+        request.write(json.encode(toFirestoreJson(payload)));
+        
+        final response = await request.close();
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          await db.update(
+            'investigation_reports',
+            {
+              'sync_status': 'synced',
+            },
+            where: 'id = ?',
+            whereArgs: [row['id']],
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to sync investigation reports: $e');
+    }
+  }
+
+  Future<String?> uploadFileToFirebaseBucket({
+    required File file,
+    required String projectId,
+    required String apiKey,
+    required String remoteName,
+  }) async {
+    try {
+      final encodedName = Uri.encodeComponent(remoteName);
+      final url = 'https://firebasestorage.googleapis.com/v1/b/$projectId.appspot.com/o?name=$encodedName&key=$apiKey';
+      final httpClient = HttpClient();
+      final request = await httpClient.postUrl(Uri.parse(url));
+      
+      final ext = file.path.split('.').last.toLowerCase();
+      if (ext == 'pdf') {
+        request.headers.contentType = ContentType('application', 'pdf');
+      } else if (ext == 'jpg' || ext == 'jpeg') {
+        request.headers.contentType = ContentType('image', 'jpeg');
+      } else if (ext == 'png') {
+        request.headers.contentType = ContentType('image', 'png');
+      } else {
+        request.headers.contentType = ContentType('application', 'octet-stream');
+      }
+
+      final bytes = await file.readAsBytes();
+      request.contentLength = bytes.length;
+      request.add(bytes);
+
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      httpClient.close();
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonMap = json.decode(body) as Map<String, dynamic>;
+        final downloadToken = jsonMap['downloadTokens'];
+        if (downloadToken != null && downloadToken.toString().isNotEmpty) {
+          return 'https://firebasestorage.googleapis.com/v1/b/$projectId.appspot.com/o/$encodedName?alt=media&token=$downloadToken';
+        }
+        return 'https://firebasestorage.googleapis.com/v1/b/$projectId.appspot.com/o/$encodedName?alt=media';
+      }
+    } catch (e) {
+      debugPrint('Firebase Storage upload failed: $e');
+    }
+    return null;
   }
 
   // --- Disaster Recovery Restore Engine ---

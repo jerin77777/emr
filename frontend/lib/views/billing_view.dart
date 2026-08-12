@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../widgets/common_widgets.dart';
 
 class BillingView extends StatefulWidget {
   final Patient? patient;
@@ -132,6 +133,14 @@ class _BillingViewState extends State<BillingView> {
           SnackBar(content: Text('Invoice $_billNumber generated successfully!')),
         );
         Navigator.pop(context);
+        showDialog(
+          context: context,
+          builder: (ctx) => BillPrintPreviewDialog(
+            bill: bill,
+            patient: _selectedPatient!,
+            items: _lineItems.map((e) => BillItem(billId: billId, itemDescription: e['description'], amount: e['amount'])).toList(),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
