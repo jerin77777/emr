@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
+import '../main.dart';
 
 class SettingsBackupView extends StatefulWidget {
   final User currentUser;
@@ -284,6 +285,131 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
     );
   }
 
+  Future<void> _handleResetDatabaseDialog() async {
+    final confirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isValid = false;
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  SizedBox(width: 12),
+                  Text('Destructive Action!'),
+                ],
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'WARNING: This will permanently delete all clinical records, patients, visits, bills, audit logs, and uploaded documents from this device.',
+                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'This action cannot be undone. To confirm, please type RESET in the box below:',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: confirmController,
+                        decoration: const InputDecoration(
+                          labelText: 'Confirmation Word',
+                          hintText: 'RESET',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (val) => val != 'RESET' ? 'Please type RESET to confirm' : null,
+                        onChanged: (val) {
+                          setStateDialog(() {
+                            isValid = val == 'RESET';
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isValid
+                      ? () {
+                          if (formKey.currentState!.validate()) {
+                            Navigator.pop(context, true);
+                          }
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Confirm & Reset'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirm != true) return;
+    if (!mounted) return;
+
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Show loading spinner
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      await DatabaseHelper.instance.resetAndSeedDatabase();
+      if (mounted) {
+        navigator.pop(); // close spinner
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Database reset and seeded successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        navigator.pop(); // close spinner
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Error resetting database: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = SyncService.instance.syncStatus;
@@ -542,72 +668,119 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
             // Right Column: Restore credentials
             Expanded(
               flex: 3,
-              child: Card(
-                elevation: 1,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Cloud Disaster Recovery',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.teal.shade900,
-                              fontWeight: FontWeight.bold,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cloud Disaster Recovery',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.teal.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                             ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Restore clinic records onto a new server or device from your cloud vault.',
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                      ),
-                      const Divider(height: 24),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Restore clinic records onto a new server or device from your cloud vault.',
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            ),
+                            const Divider(height: 24),
 
-                      TextFormField(
-                        controller: _restoreProjectController,
-                        decoration: const InputDecoration(
-                          labelText: 'Cloud Project ID',
-                          border: OutlineInputBorder(),
+                            TextFormField(
+                              controller: _restoreProjectController,
+                              decoration: const InputDecoration(
+                                labelText: 'Cloud Project ID',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            TextFormField(
+                              controller: _restoreApiKeyController,
+                              decoration: const InputDecoration(
+                                labelText: 'Cloud Web API Key',
+                                border: OutlineInputBorder(),
+                              ),
+                              obscureText: true,
+                            ),
+                            const SizedBox(height: 12),
+
+                            TextFormField(
+                              controller: _restoreClinicController,
+                              decoration: const InputDecoration(
+                                labelText: 'Clinic Identifier Key',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: OutlinedButton.icon(
+                                onPressed: _confirmRestore,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red.shade900,
+                                  side: BorderSide(color: Colors.red.shade200),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.cloud_download),
+                                label: const Text('Restore Clinic Data', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-
-                      TextFormField(
-                        controller: _restoreApiKeyController,
-                        decoration: const InputDecoration(
-                          labelText: 'Cloud Web API Key',
-                          border: OutlineInputBorder(),
+                    ),
+                    const SizedBox(height: 24),
+                    // Database Maintenance Card
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Database Maintenance',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.teal.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Perform destructive database actions. Be extremely cautious, as these actions cannot be undone.',
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                            ),
+                            const Divider(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton.icon(
+                                onPressed: _handleResetDatabaseDialog,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.shade700,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.delete_forever),
+                                label: const Text('Reset Database', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
                         ),
-                        obscureText: true,
                       ),
-                      const SizedBox(height: 12),
-
-                      TextFormField(
-                        controller: _restoreClinicController,
-                        decoration: const InputDecoration(
-                          labelText: 'Clinic Identifier Key',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: OutlinedButton.icon(
-                          onPressed: _confirmRestore,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red.shade900,
-                            side: BorderSide(color: Colors.red.shade200),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: const Icon(Icons.cloud_download),
-                          label: const Text('Restore Clinic Data', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

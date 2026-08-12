@@ -372,6 +372,27 @@ class DatabaseHelper {
       if (!settingsCols.contains('value')) {
         await db.execute('ALTER TABLE "settings" ADD COLUMN "value" TEXT;');
       }
+      final documentsInfo = await db.rawQuery("PRAGMA table_info('documents')");
+      if (documentsInfo.isEmpty) {
+        await db.execute('''CREATE TABLE IF NOT EXISTS "documents" (
+          "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+          "document_uuid" TEXT NOT NULL UNIQUE,
+          "patient_id" INTEGER NOT NULL,
+          "visit_id" INTEGER,
+          "bill_id" INTEGER,
+          "document_type" TEXT NOT NULL,
+          "file_name" TEXT NOT NULL,
+          "file_path" TEXT NOT NULL,
+          "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+          "created_by" INTEGER,
+          FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
+          FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
+          FOREIGN KEY ("bill_id") REFERENCES "bills" ("id") ON DELETE SET NULL,
+          FOREIGN KEY ("created_by") REFERENCES "users" ("id") ON DELETE SET NULL
+        );''');
+        await db.execute('''CREATE INDEX IF NOT EXISTS "idx_documents_patient" ON "documents" ("patient_id");''');
+        await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_documents_uuid" ON "documents" ("document_uuid");''');
+      }
     } catch (_) {}
   }
 
@@ -526,6 +547,24 @@ class DatabaseHelper {
   "key" TEXT PRIMARY KEY,
   "value" TEXT
 );''');
+    await db.execute('''CREATE TABLE IF NOT EXISTS "documents" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "document_uuid" TEXT NOT NULL UNIQUE,
+  "patient_id" INTEGER NOT NULL,
+  "visit_id" INTEGER,
+  "bill_id" INTEGER,
+  "document_type" TEXT NOT NULL,
+  "file_name" TEXT NOT NULL,
+  "file_path" TEXT NOT NULL,
+  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "created_by" INTEGER,
+  FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
+  FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
+  FOREIGN KEY ("bill_id") REFERENCES "bills" ("id") ON DELETE SET NULL,
+  FOREIGN KEY ("created_by") REFERENCES "users" ("id") ON DELETE SET NULL
+);''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_documents_patient" ON "documents" ("patient_id");''');
+    await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_documents_uuid" ON "documents" ("document_uuid");''');
     await _seedInitialData(db);
   }
 
@@ -986,11 +1025,11 @@ class DatabaseHelper {
     }
 
     if (startDate != null && startDate.isNotEmpty) {
-      whereClause += ' AND DATE(v.visit_date) >= DATE(?)';
+      whereClause += ' AND DATE(COALESCE(v.visit_date, v.created_at)) >= DATE(?)';
       whereArgs.add(startDate);
     }
     if (endDate != null && endDate.isNotEmpty) {
-      whereClause += ' AND DATE(v.visit_date) <= DATE(?)';
+      whereClause += ' AND DATE(COALESCE(v.visit_date, v.created_at)) <= DATE(?)';
       whereArgs.add(endDate);
     }
 
@@ -1011,9 +1050,15 @@ class DatabaseHelper {
     final sql = '''
       SELECT 
         v.*, 
+        COALESCE(v.visit_date, v.created_at) as visit_date,
         p.full_name as patient_name, 
         p.patient_code as patient_code, 
         p.mobile_number as patient_mobile,
+        p.date_of_birth as patient_dob,
+        p.age as patient_age,
+        p.gender as patient_gender,
+        p.address as patient_address,
+        p.patient_uuid as patient_uuid,
         u.full_name as doctor_name,
         COALESCE(b.payment_status, 'Unbilled') as bill_status,
         b.id as bill_id
@@ -1022,7 +1067,7 @@ class DatabaseHelper {
       LEFT JOIN users u ON v.doctor_id = u.id
       LEFT JOIN bills b ON v.id = b.visit_id
       WHERE $whereClause
-      ORDER BY v.visit_date DESC, v.id DESC
+      ORDER BY COALESCE(v.visit_date, v.created_at) DESC, v.id DESC
       LIMIT ? OFFSET ?
     ''';
     
@@ -1054,11 +1099,11 @@ class DatabaseHelper {
     }
 
     if (startDate != null && startDate.isNotEmpty) {
-      whereClause += ' AND DATE(v.visit_date) >= DATE(?)';
+      whereClause += ' AND DATE(COALESCE(v.visit_date, v.created_at)) >= DATE(?)';
       whereArgs.add(startDate);
     }
     if (endDate != null && endDate.isNotEmpty) {
-      whereClause += ' AND DATE(v.visit_date) <= DATE(?)';
+      whereClause += ' AND DATE(COALESCE(v.visit_date, v.created_at)) <= DATE(?)';
       whereArgs.add(endDate);
     }
 
@@ -1092,6 +1137,7 @@ class DatabaseHelper {
   Future<void> resetAndSeedDatabase() async {
     final db = await instance.database;
     await db.execute('PRAGMA foreign_keys = OFF;');
+    await db.execute('DROP TABLE IF EXISTS "documents";');
     await db.execute('DROP TABLE IF EXISTS "settings";');
     await db.execute('DROP TABLE IF EXISTS "investigation_reports";');
     await db.execute('DROP TABLE IF EXISTS "sync_queue";');
@@ -1104,6 +1150,42 @@ class DatabaseHelper {
     await db.execute('DROP TABLE IF EXISTS "roles";');
     await _createDB(db, 1);
     await db.execute('PRAGMA foreign_keys = ON;');
+  }
+
+  // === Document CRUD Operations & File Helpers ===
+  static Future<String> getPatientDocumentsDir(String patientUuid, String typeDir) async {
+    final appDir = await getAppDirectoryPath();
+    final dir = Directory(join(appDir, 'ClinicData', 'documents', 'patients', patientUuid, typeDir));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir.path;
+  }
+
+  Future<int> insertDocument(Document document) async {
+    final db = await instance.database;
+    return await db.insert('documents', document.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Document>> getDocumentsForPatient(int patientId) async {
+    final db = await instance.database;
+    final result = await db.query('documents', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
+    return result.map((json) => Document.fromMap(json)).toList();
+  }
+
+  Future<Document?> getDocumentById(int id) async {
+    final db = await instance.database;
+    final maps = await db.query('documents', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      return Document.fromMap(maps.first);
+    } else {
+      return null;
+    }
+  }
+
+  Future<int> deleteDocument(int id) async {
+    final db = await instance.database;
+    return await db.delete('documents', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> close() async {

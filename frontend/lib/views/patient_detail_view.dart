@@ -1009,6 +1009,82 @@ class _AddInvestigationReportDialogState extends State<AddInvestigationReportDia
   String? _pickedFileName;
   int? _pickedFileSize;
   bool _isSaving = false;
+  bool _isScanning = false;
+
+  Future<void> _scanDocument() async {
+    if (!Platform.isWindows) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document scanning is only supported on Windows devices.')),
+      );
+      return;
+    }
+
+    setState(() => _isScanning = true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final tempDir = Directory.systemTemp;
+      final tempPath = path.join(tempDir.path, 'scan_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final file = File(tempPath);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+
+      // WIA PowerShell script to show native scan dialog
+      final psScript = '''
+\$dialog = New-Object -ComObject WIA.CommonDialog
+try {
+    \$image = \$dialog.ShowAcquireImage()
+    if (\$image) {
+        \$image.SaveFile("$tempPath")
+        Write-Output "SUCCESS"
+    } else {
+        Write-Output "CANCEL"
+    }
+} catch {
+    Write-Output "ERROR: \$(\$_.Exception.Message)"
+}
+''';
+
+      final result = await Process.run('powershell', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command', psScript
+      ]);
+
+      final output = result.stdout.toString().trim();
+      if (output.contains("SUCCESS") && file.existsSync()) {
+        final length = await file.length();
+        setState(() {
+          _pickedFile = file;
+          _pickedFileName = path.basename(tempPath);
+          _pickedFileSize = length;
+          if (_titleController.text.trim().isEmpty) {
+            _titleController.text = 'Scanned Investigation Document';
+          }
+        });
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Document scanned successfully!'), backgroundColor: Colors.green),
+        );
+      } else if (output.contains("CANCEL")) {
+        // User cancelled without scanning
+      } else {
+        throw Exception(output.isNotEmpty ? output : result.stderr.toString());
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Scanning failed: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    }
+  }
 
   Future<void> _pickFile() async {
     try {
@@ -1072,10 +1148,11 @@ class _AddInvestigationReportDialogState extends State<AddInvestigationReportDia
     setState(() => _isSaving = true);
     try {
       final reportUuid = 'rep-${DateTime.now().millisecondsSinceEpoch}';
+      final ext = path.extension(_pickedFileName!).toLowerCase();
 
-      // 1. Copy to Local App Storage (Persistent Application Directory)
-      final reportsDirPath = await DatabaseHelper.getReportsDirectoryPath();
-      final localPath = path.join(reportsDirPath, '${reportUuid}_$_pickedFileName');
+      // 1. Copy to Local App Storage under unified patient directory
+      final dirPath = await DatabaseHelper.getPatientDocumentsDir(widget.patient.patientUuid, 'investigations');
+      final localPath = path.join(dirPath, '$reportUuid$ext');
       await _pickedFile!.copy(localPath);
 
       // 2. Firebase Storage Bucket Upload (if configured)
@@ -1089,7 +1166,7 @@ class _AddInvestigationReportDialogState extends State<AddInvestigationReportDia
           file: File(localPath),
           projectId: proj,
           apiKey: key,
-          remoteName: 'investigations/${reportUuid}_$_pickedFileName',
+          remoteName: 'investigations/$reportUuid$ext',
         );
         if (uploadedUrl != null) {
           fileUrl = uploadedUrl;
@@ -1184,11 +1261,37 @@ class _AddInvestigationReportDialogState extends State<AddInvestigationReportDia
                       ),
                     ),
                     const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: _isSaving ? null : _pickFile,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
-                      icon: const Icon(Icons.folder_open),
-                      label: Text(_pickedFileName == null ? 'Browse File' : 'Change File'),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _isSaving || _isScanning ? null : _pickFile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal.shade700,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(150, 36),
+                          ),
+                          icon: const Icon(Icons.folder_open, size: 16),
+                          label: Text(_pickedFileName == null ? 'Browse File' : 'Change File'),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: _isSaving || _isScanning ? null : _scanDocument,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal.shade800,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(150, 36),
+                          ),
+                          icon: _isScanning
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Icon(Icons.document_scanner, size: 16),
+                          label: Text(_isScanning ? 'Scanning...' : 'Scan Document'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1294,14 +1397,25 @@ class ViewInvestigationReportDialog extends StatelessWidget {
 
   const ViewInvestigationReportDialog({super.key, required this.report});
 
-  void _openFileExternally(String filePath) {
+  void _openFileExternally(String filePath, String? fileUrl) {
     try {
-      if (Platform.isWindows) {
-        Process.run('cmd', ['/c', 'start', '', filePath]);
-      } else if (Platform.isMacOS) {
-        Process.run('open', [filePath]);
-      } else if (Platform.isLinux) {
-        Process.run('xdg-open', [filePath]);
+      final file = File(filePath);
+      if (file.existsSync()) {
+        if (Platform.isWindows) {
+          Process.run('cmd', ['/c', 'start', '', filePath]);
+        } else if (Platform.isMacOS) {
+          Process.run('open', [filePath]);
+        } else if (Platform.isLinux) {
+          Process.run('xdg-open', [filePath]);
+        }
+      } else if (fileUrl != null && fileUrl.isNotEmpty) {
+        if (Platform.isWindows) {
+          Process.run('cmd', ['/c', 'start', '', fileUrl]);
+        } else if (Platform.isMacOS) {
+          Process.run('open', [fileUrl]);
+        } else if (Platform.isLinux) {
+          Process.run('xdg-open', [fileUrl]);
+        }
       }
     } catch (e) {
       debugPrint('Could not open file externally: $e');
@@ -1397,7 +1511,7 @@ class ViewInvestigationReportDialog extends StatelessWidget {
                           backgroundColor: Colors.teal.shade800,
                           foregroundColor: Colors.white,
                         ),
-                        onPressed: () => _openFileExternally(rep.filePath),
+                        onPressed: () => _openFileExternally(rep.filePath, rep.fileUrl),
                         icon: const Icon(Icons.open_in_new, size: 18),
                         label: const Text('Open PDF'),
                       ),
@@ -1446,7 +1560,7 @@ class ViewInvestigationReportDialog extends StatelessWidget {
                           backgroundColor: Colors.blue.shade700,
                           foregroundColor: Colors.white,
                         ),
-                        onPressed: () => _openFileExternally(rep.filePath),
+                        onPressed: () => _openFileExternally(rep.filePath, rep.fileUrl),
                         icon: const Icon(Icons.open_in_new, size: 18),
                         label: const Text('Open DOC'),
                       ),
@@ -1486,7 +1600,7 @@ class ViewInvestigationReportDialog extends StatelessWidget {
       actions: [
         if (isImage && file.existsSync())
           TextButton.icon(
-            onPressed: () => _openFileExternally(rep.filePath),
+            onPressed: () => _openFileExternally(rep.filePath, rep.fileUrl),
             icon: const Icon(Icons.open_in_new),
             label: const Text('Open Full Image'),
           ),

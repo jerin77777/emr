@@ -322,7 +322,7 @@ class PatientVisit {
       visitUuid: map['visit_uuid'] as String,
       patientId: (map['patient_id'] as num).toInt(),
       doctorId: map['doctor_id'] != null ? (map['doctor_id'] as num).toInt() : null,
-      visitDate: map['visit_date'] as String?,
+      visitDate: map['visit_date'] as String? ?? (map['created_at'] as String? ?? DateTime.now().toString()).split('.')[0],
       visitNumber: map['visit_number'] != null ? (map['visit_number'] as num).toInt() : null,
       chiefComplaint: map['chief_complaint'] as String?,
       history: map['history'] as String?,
@@ -349,7 +349,7 @@ class PatientVisit {
       'visit_uuid': visitUuid,
       'patient_id': patientId,
       'doctor_id': doctorId,
-      'visit_date': visitDate,
+      'visit_date': visitDate ?? DateTime.now().toString().split('.')[0],
       'visit_number': visitNumber,
       'chief_complaint': chiefComplaint,
       'history': history,
@@ -947,5 +947,87 @@ class VitalsFormatter {
     if (formattedSat.isNotEmpty) parts.add('SPO2: $formattedSat');
 
     return parts.join(' | ');
+  }
+}
+
+class Document {
+  final int? id;
+  final String documentUuid;
+  final int patientId;
+  final int? visitId;
+  final int? billId;
+  final String documentType;
+  final String fileName;
+  final String filePath;
+  final String? createdAt;
+  final int? createdBy;
+
+  const Document({
+    this.id,
+    required this.documentUuid,
+    required this.patientId,
+    this.visitId,
+    this.billId,
+    required this.documentType,
+    required this.fileName,
+    required this.filePath,
+    this.createdAt,
+    this.createdBy,
+  });
+
+  factory Document.fromMap(Map<String, dynamic> map) {
+    return Document(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      documentUuid: map['document_uuid'] as String,
+      patientId: (map['patient_id'] as num).toInt(),
+      visitId: map['visit_id'] != null ? (map['visit_id'] as num).toInt() : null,
+      billId: map['bill_id'] != null ? (map['bill_id'] as num).toInt() : null,
+      documentType: map['document_type'] as String,
+      fileName: map['file_name'] as String,
+      filePath: map['file_path'] as String,
+      createdAt: map['created_at'] as String?,
+      createdBy: map['created_by'] != null ? (map['created_by'] as num).toInt() : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'document_uuid': documentUuid,
+      'patient_id': patientId,
+      'visit_id': visitId,
+      'bill_id': billId,
+      'document_type': documentType,
+      'file_name': fileName,
+      'file_path': filePath,
+      'created_at': createdAt,
+      'created_by': createdBy,
+    };
+  }
+
+  Document copyWith({
+    int? id,
+    String? documentUuid,
+    int? patientId,
+    int? visitId,
+    int? billId,
+    String? documentType,
+    String? fileName,
+    String? filePath,
+    String? createdAt,
+    int? createdBy,
+  }) {
+    return Document(
+      id: id ?? this.id,
+      documentUuid: documentUuid ?? this.documentUuid,
+      patientId: patientId ?? this.patientId,
+      visitId: visitId ?? this.visitId,
+      billId: billId ?? this.billId,
+      documentType: documentType ?? this.documentType,
+      fileName: fileName ?? this.fileName,
+      filePath: filePath ?? this.filePath,
+      createdAt: createdAt ?? this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
+    );
   }
 }

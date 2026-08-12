@@ -240,6 +240,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         advice: advice,
         referralTo: referral,
         followupDate: followup,
+        visitDate: DateTime.now().toString().split('.')[0],
         syncStatus: 'pending',
       );
 
@@ -274,30 +275,36 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       tempVal = '$tempVal $_tempUnit';
     }
 
-    final printContent = generateConsultationPrintText(
-      patientName: widget.patient.fullName,
-      patientCode: widget.patient.patientCode,
-      patientMobile: widget.patient.mobileNumber,
-      visitDate: DateTime.now().toString().split(' ')[0],
-      doctorName: widget.currentUser.fullName,
+    final tempVisit = PatientVisit(
+      visitUuid: 'vst-draft',
+      patientId: widget.patient.id ?? 0,
+      doctorId: widget.currentUser.id,
+      visitNumber: 0,
       chiefComplaint: _sanitizeInput(_chiefComplaintController.text),
       history: _sanitizeInput(_historyController.text),
+      pastMedicalHistory: _sanitizeInput(_pastHistoryController.text),
       vitalsBp: _sanitizeInput(_vitalsBpController.text),
       vitalsPulse: _sanitizeInput(_vitalsPulseController.text),
       vitalsTemp: tempVal,
       vitalsSaturation: _sanitizeInput(_vitalsSaturationController.text),
+      systemicExamination: _sanitizeInput(_systemicExamController.text),
+      investigations: _sanitizeInput(_investigationsController.text),
       diagnosis: _sanitizeInput(_diagnosisController.text),
       diagnosisCode: _selectedIcdCode,
       advice: _sanitizeInput(_adviceController.text),
+      referralTo: _sanitizeInput(_referralToController.text),
       followupDate: _sanitizeInput(_followupDateController.text),
-      isDraft: true,
+      visitDate: DateTime.now().toString().split(' ')[0],
     );
 
     ConsultationPrintPreviewDialog.show(
       context,
-      dialog: ConsultationPrintPreviewDialog(
+      dialog: ConsultationPrintPreviewDialog.fromVisit(
+        visit: tempVisit,
+        patient: widget.patient,
+        currentUser: widget.currentUser,
         title: 'Consultation Draft Print Preview',
-        printContent: printContent,
+        isDraft: true,
       ),
     );
   }

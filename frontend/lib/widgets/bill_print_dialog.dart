@@ -1,13 +1,11 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../services/document_pdf_generator.dart';
 
 /// Common Invoice / Bill Print Preview Dialog Widget
 class BillPrintPreviewDialog extends StatefulWidget {
@@ -42,7 +40,7 @@ class BillPrintPreviewDialog extends StatefulWidget {
 class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
   List<BillItem> _items = [];
   bool _isLoading = false;
-  bool _isGeneratingPdf = false;
+  bool _isPrinting = false;
 
   @override
   void initState() {
@@ -69,211 +67,79 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
     }
   }
 
-  Future<Uint8List> _generateBillPdf() async {
-    final b = widget.bill;
-    final p = widget.patient;
-    final pdf = pw.Document();
+  Future<void> _handleNativePrint() async {
+    setState(() => _isPrinting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
-    final billDateStr = b.billDate ?? DateTime.now().toString().split(' ')[0];
-    final paymentStatus = b.paymentStatus ?? 'Paid';
-    final paymentMethod = b.paymentMethod ?? 'Cash';
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Center(
-                child: pw.Column(
-                  children: [
-                    pw.Text('ANYTHING EMR CLINIC', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
-                    pw.SizedBox(height: 4),
-                    pw.Text('PATIENT INVOICE & RECEIPT', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
-                    pw.SizedBox(height: 16),
-                  ],
-                ),
-              ),
-              pw.Divider(thickness: 1, color: PdfColors.grey400),
-              pw.SizedBox(height: 10),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Invoice #: ${b.billNumber}', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                      pw.SizedBox(height: 2),
-                      pw.Text('Date: $billDateStr', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('Status: $paymentStatus', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: paymentStatus == 'Paid' ? PdfColors.green900 : PdfColors.amber900)),
-                      pw.SizedBox(height: 2),
-                      pw.Text('Method: $paymentMethod', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 16),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.teal50,
-                  borderRadius: pw.BorderRadius.circular(6),
-                ),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('Patient: ${p.fullName}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
-                        pw.SizedBox(height: 2),
-                        pw.Text('Code: ${p.patientCode}', style: const pw.TextStyle(fontSize: 11)),
-                      ],
-                    ),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.end,
-                      children: [
-                        pw.Text('Mobile: ${p.mobileNumber}', style: const pw.TextStyle(fontSize: 11)),
-                        pw.SizedBox(height: 2),
-                        pw.Text('${p.gender} | ${p.age ?? "N/A"} yrs', style: const pw.TextStyle(fontSize: 11)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 20),
-              pw.Text('Itemized Charges Breakdown:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
-              pw.SizedBox(height: 8),
-              if (_items.isNotEmpty)
-                pw.TableHelper.fromTextArray(
-                  headers: ['#', 'Description', 'Amount (INR)'],
-                  data: _items.asMap().entries.map((entry) {
-                    final idx = entry.key + 1;
-                    final item = entry.value;
-                    return [
-                      '$idx',
-                      item.itemDescription,
-                      'INR ${item.amount.toStringAsFixed(2)}',
-                    ];
-                  }).toList(),
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.teal700),
-                  cellStyle: const pw.TextStyle(fontSize: 11),
-                )
-              else
-                pw.TableHelper.fromTextArray(
-                  headers: ['Description', 'Amount (INR)'],
-                  data: [
-                    if ((b.consultationCharges ?? 0) > 0)
-                      ['Doctor Consultation Fee', 'INR ${b.consultationCharges!.toStringAsFixed(2)}'],
-                    if ((b.procedureCharges ?? 0) > 0)
-                      ['Procedure Charges', 'INR ${b.procedureCharges!.toStringAsFixed(2)}'],
-                    if ((b.additionalCharges ?? 0) > 0)
-                      ['Additional Charges', 'INR ${b.additionalCharges!.toStringAsFixed(2)}'],
-                  ],
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.teal700),
-                  cellStyle: const pw.TextStyle(fontSize: 11),
-                ),
-              pw.SizedBox(height: 16),
-              pw.Divider(thickness: 0.5),
-              pw.SizedBox(height: 8),
-              if ((b.discountAmount ?? 0) > 0)
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Discount Applied:', style: pw.TextStyle(color: PdfColors.red900, fontSize: 11)),
-                    pw.Text('- INR ${b.discountAmount!.toStringAsFixed(2)}', style: pw.TextStyle(color: PdfColors.red900, fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                  ],
-                ),
-              pw.SizedBox(height: 4),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('TOTAL AMOUNT PAYABLE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
-                  pw.Text('INR ${b.totalAmount.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16, color: PdfColors.teal900)),
-                ],
-              ),
-              pw.Spacer(),
-              pw.Divider(thickness: 0.5),
-              pw.SizedBox(height: 8),
-              pw.Center(
-                child: pw.Text('Thank you for visiting Anything EMR Clinic!', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    return pdf.save();
-  }
-
-  void _openFileExternally(String filePath) {
     try {
-      if (Platform.isWindows) {
-        Process.run('cmd', ['/c', 'start', '', filePath]);
-      } else if (Platform.isMacOS) {
-        Process.run('open', [filePath]);
-      } else if (Platform.isLinux) {
-        Process.run('xdg-open', [filePath]);
-      }
-    } catch (e) {
-      debugPrint('Could not open PDF file externally: $e');
-    }
-  }
-
-  Future<void> _handlePdfPrint() async {
-    setState(() => _isGeneratingPdf = true);
-    try {
-      final pdfBytes = await _generateBillPdf();
-
-      Directory? downloadsDir;
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        final docDir = await getApplicationDocumentsDirectory();
-        downloadsDir = Directory(path.join(docDir.parent.path, 'Downloads'));
-        if (!await downloadsDir.exists()) {
-          downloadsDir = docDir;
+      // 1. Fetch Doctor details if available
+      String? doctorName;
+      if (widget.bill.visitId != null) {
+        final visit = await DatabaseHelper.instance.getPatientVisitById(widget.bill.visitId!);
+        if (visit?.doctorId != null) {
+          final docUser = await DatabaseHelper.instance.getUserById(visit!.doctorId!);
+          doctorName = docUser?.fullName;
         }
-      } else {
-        downloadsDir = await getApplicationDocumentsDirectory();
       }
 
-      final fileName = 'Invoice_${widget.bill.billNumber}.pdf';
-      final filePath = path.join(downloadsDir.path, fileName);
-      final pdfFile = File(filePath);
-      await pdfFile.writeAsBytes(pdfBytes);
+      // 2. Generate PDF bytes using the reusable DocumentPdfGenerator
+      final pdfBytes = await DocumentPdfGenerator.generateBillPdf(
+        patient: widget.patient,
+        bill: widget.bill,
+        items: _items,
+        doctorName: doctorName,
+      );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Invoice PDF generated & downloaded: $fileName'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Open',
-              textColor: Colors.white,
-              onPressed: () => _openFileExternally(filePath),
-            ),
-          ),
+      // 3. Trigger native printing
+      final printed = await Printing.layoutPdf(
+        onLayout: (format) async => pdfBytes,
+        name: 'Invoice_${widget.bill.billNumber}.pdf',
+      );
+
+      // 4. Save local copy and record in SQLite
+      if (printed) {
+        final dirPath = await DatabaseHelper.getPatientDocumentsDir(widget.patient.patientUuid, 'bills');
+        final fileName = 'Invoice_${widget.bill.billNumber}.pdf';
+        final filePath = path.join(dirPath, fileName);
+
+        // Save PDF file locally
+        final pdfFile = File(filePath);
+        await pdfFile.writeAsBytes(pdfBytes);
+
+        // Record document metadata in SQLite
+        final docUuid = 'doc-${DateTime.now().millisecondsSinceEpoch}';
+        final doc = Document(
+          documentUuid: docUuid,
+          patientId: widget.patient.id!,
+          visitId: widget.bill.visitId,
+          billId: widget.bill.id,
+          documentType: 'bill',
+          fileName: fileName,
+          filePath: filePath,
         );
+        await DatabaseHelper.instance.insertDocument(doc);
+
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Invoice PDF saved and registered successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
-      _openFileExternally(filePath);
+      navigator.pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating PDF: $e'), backgroundColor: Colors.red),
+        messenger.showSnackBar(
+          SnackBar(content: Text('Print job failed: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) setState(() => _isGeneratingPdf = false);
+      if (mounted) {
+        setState(() => _isPrinting = false);
+      }
     }
   }
 
@@ -562,8 +428,8 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
             backgroundColor: Colors.teal.shade800,
             foregroundColor: Colors.white,
           ),
-          onPressed: _isGeneratingPdf ? null : _handlePdfPrint,
-          icon: _isGeneratingPdf
+          onPressed: _isPrinting ? null : _handleNativePrint,
+          icon: _isPrinting
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : const Icon(Icons.print),
           label: const Text('Print', style: TextStyle(fontWeight: FontWeight.bold)),

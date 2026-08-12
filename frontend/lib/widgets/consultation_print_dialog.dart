@@ -1,6 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
+import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../services/document_pdf_generator.dart';
 
 /// Helper function to format a consultation record into a standard printable document string.
 String generateConsultationPrintText({
@@ -108,22 +114,32 @@ String generateConsultationPrintText({
 }
 
 /// A common popup dialog widget for displaying and printing consultation records.
-class ConsultationPrintPreviewDialog extends StatelessWidget {
+class ConsultationPrintPreviewDialog extends StatefulWidget {
   final String title;
   final String printContent;
+  final Patient patient;
+  final PatientVisit visit;
+  final User? currentUser;
+  final bool isDraft;
 
   const ConsultationPrintPreviewDialog({
     super.key,
-    this.title = 'Consultation Print Preview',
+    required this.title,
     required this.printContent,
+    required this.patient,
+    required this.visit,
+    this.currentUser,
+    this.isDraft = false,
   });
 
-  /// Factory constructor from PatientVisit and Patient objects (used in patient directory)
+  /// Factory constructor from PatientVisit and Patient objects
   factory ConsultationPrintPreviewDialog.fromVisit({
     Key? key,
     required PatientVisit visit,
     required Patient patient,
+    User? currentUser,
     String? title,
+    bool isDraft = false,
   }) {
     final content = generateConsultationPrintText(
       patientName: patient.fullName,
@@ -145,42 +161,89 @@ class ConsultationPrintPreviewDialog extends StatelessWidget {
       advice: visit.advice,
       referralTo: visit.referralTo,
       followupDate: visit.followupDate,
+      isDraft: isDraft,
     );
     return ConsultationPrintPreviewDialog(
       key: key,
-      title: title ?? 'Consultation Record Preview - ${visit.visitUuid}',
+      title: title ?? (isDraft ? 'Consultation Draft Preview' : 'Consultation Record Preview - ${visit.visitUuid.substring(0, 8)}...'),
       printContent: content,
+      patient: patient,
+      visit: visit,
+      currentUser: currentUser,
+      isDraft: isDraft,
     );
   }
 
-  /// Factory constructor from a record Map (used in Consultation Records view)
+  /// Factory constructor from a record Map
   factory ConsultationPrintPreviewDialog.fromMap({
     Key? key,
     required Map<String, dynamic> record,
+    User? currentUser,
     String title = 'Consultation Print Preview',
   }) {
-    final content = generateConsultationPrintText(
-      patientName: record['patient_name']?.toString() ?? '',
+    final patient = Patient(
+      id: record['patient_id'] != null ? (record['patient_id'] as num).toInt() : null,
+      patientUuid: record['patient_uuid']?.toString() ?? '',
       patientCode: record['patient_code']?.toString() ?? '',
-      patientMobile: record['patient_mobile']?.toString() ?? '',
-      visitDate: record['visit_date']?.toString(),
-      visitUuid: record['visit_uuid']?.toString(),
-      doctorName: record['doctor_name']?.toString(),
+      fullName: record['patient_name']?.toString() ?? '',
+      dateOfBirth: record['patient_dob']?.toString() ?? '',
+      age: record['patient_age'] != null ? (record['patient_age'] as num).toInt() : null,
+      gender: record['patient_gender']?.toString() ?? '',
+      mobileNumber: record['patient_mobile']?.toString() ?? '',
+      address: record['patient_address']?.toString() ?? '',
+    );
+    final visit = PatientVisit(
+      id: record['id'] != null ? (record['id'] as num).toInt() : null,
+      visitUuid: record['visit_uuid']?.toString() ?? '',
+      patientId: record['patient_id'] != null ? (record['patient_id'] as num).toInt() : 0,
+      visitDate: record['visit_date']?.toString() ?? DateTime.now().toString().split('.')[0],
       chiefComplaint: record['chief_complaint']?.toString(),
       history: record['history']?.toString(),
+      pastMedicalHistory: record['past_medical_history']?.toString(),
       vitalsBp: record['vitals_bp']?.toString(),
       vitalsPulse: record['vitals_pulse']?.toString(),
       vitalsTemp: record['vitals_temp']?.toString(),
       vitalsSaturation: record['vitals_saturation']?.toString(),
+      systemicExamination: record['systemic_examination']?.toString(),
+      investigations: record['investigations']?.toString(),
       diagnosis: record['diagnosis']?.toString(),
       diagnosisCode: record['diagnosis_code']?.toString(),
       advice: record['advice']?.toString(),
+      referralTo: record['referral_to']?.toString(),
       followupDate: record['followup_date']?.toString(),
+    );
+
+    final content = generateConsultationPrintText(
+      patientName: patient.fullName,
+      patientCode: patient.patientCode,
+      patientMobile: patient.mobileNumber,
+      visitDate: visit.visitDate,
+      visitUuid: visit.visitUuid,
+      doctorName: record['doctor_name']?.toString(),
+      chiefComplaint: visit.chiefComplaint,
+      history: visit.history,
+      pastMedicalHistory: visit.pastMedicalHistory,
+      vitalsBp: visit.vitalsBp,
+      vitalsPulse: visit.vitalsPulse,
+      vitalsTemp: visit.vitalsTemp,
+      vitalsSaturation: visit.vitalsSaturation,
+      systemicExamination: visit.systemicExamination,
+      investigations: visit.investigations,
+      diagnosis: visit.diagnosis,
+      diagnosisCode: visit.diagnosisCode,
+      advice: visit.advice,
+      referralTo: visit.referralTo,
+      followupDate: visit.followupDate,
+      isDraft: false,
     );
     return ConsultationPrintPreviewDialog(
       key: key,
       title: title,
       printContent: content,
+      patient: patient,
+      visit: visit,
+      currentUser: currentUser,
+      isDraft: false,
     );
   }
 
@@ -193,19 +256,107 @@ class ConsultationPrintPreviewDialog extends StatelessWidget {
   }
 
   @override
+  State<ConsultationPrintPreviewDialog> createState() => _ConsultationPrintPreviewDialogState();
+}
+
+class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPreviewDialog> {
+  bool _isPrinting = false;
+
+  Future<void> _handleNativePrint() async {
+    setState(() => _isPrinting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    try {
+      // 1. Fetch Doctor info if available
+      String? doctorName;
+      if (widget.visit.doctorId != null) {
+        final docUser = await DatabaseHelper.instance.getUserById(widget.visit.doctorId!);
+        doctorName = docUser?.fullName;
+      }
+
+      // 2. Generate PDF bytes
+      final pdfBytes = await DocumentPdfGenerator.generateConsultationPdf(
+        patient: widget.patient,
+        visit: widget.visit,
+        doctorName: doctorName,
+      );
+
+      // 3. Open System Native Print Preview & Dialog
+      final printed = await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+        name: 'Consultation_${widget.visit.visitUuid}.pdf',
+      );
+
+      // 4. Save Copy Locally and Record in SQLite (only if not a draft)
+      if (printed && !widget.isDraft) {
+        final dirPath = await DatabaseHelper.getPatientDocumentsDir(widget.patient.patientUuid, 'consultations');
+        final fileName = 'Consultation_${widget.visit.visitUuid}.pdf';
+        final filePath = path.join(dirPath, fileName);
+
+        // Write PDF file to app support path
+        final pdfFile = File(filePath);
+        await pdfFile.writeAsBytes(pdfBytes);
+
+        // Record document metadata in SQLite documents table
+        final docUuid = 'doc-${DateTime.now().millisecondsSinceEpoch}';
+        final doc = Document(
+          documentUuid: docUuid,
+          patientId: widget.patient.id!,
+          visitId: widget.visit.id,
+          documentType: 'consultation',
+          fileName: fileName,
+          filePath: filePath,
+          createdBy: widget.currentUser?.id,
+        );
+        await DatabaseHelper.instance.insertDocument(doc);
+        
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Consultation PDF saved and registered successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+      navigator.pop();
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Print job failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPrinting = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(Icons.print, color: Colors.teal.shade700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold, fontSize: 16),
-              overflow: TextOverflow.ellipsis,
-            ),
+          Row(
+            children: [
+              Icon(Icons.print, color: Colors.teal.shade700),
+              const SizedBox(width: 8),
+              Text(
+                widget.title,
+                style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
           ),
         ],
       ),
@@ -226,7 +377,7 @@ class ConsultationPrintPreviewDialog extends StatelessWidget {
             ),
             child: SingleChildScrollView(
               child: SelectableText(
-                printContent,
+                widget.printContent,
                 style: const TextStyle(fontFamily: 'Courier', fontSize: 11),
               ),
             ),
@@ -236,7 +387,7 @@ class ConsultationPrintPreviewDialog extends StatelessWidget {
       actions: [
         TextButton.icon(
           onPressed: () {
-            Clipboard.setData(ClipboardData(text: printContent));
+            Clipboard.setData(ClipboardData(text: widget.printContent));
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Consultation text copied to clipboard!')),
             );
@@ -245,17 +396,11 @@ class ConsultationPrintPreviewDialog extends StatelessWidget {
           label: const Text('Copy Text'),
         ),
         ElevatedButton.icon(
-          onPressed: () {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('PDF layout generated! Sending job to printer...'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          },
+          onPressed: _isPrinting ? null : _handleNativePrint,
           style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
-          icon: const Icon(Icons.print),
+          icon: _isPrinting 
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Icon(Icons.print),
           label: const Text('Print'),
         ),
       ],

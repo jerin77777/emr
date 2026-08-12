@@ -366,35 +366,51 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
                               _buildPatientHeaderCard(),
                               const SizedBox(height: 24),
 
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Left side: Timeline/History
-                                  Expanded(
-                                    flex: 3,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final isNarrow = constraints.maxWidth < 900;
+                                  if (isNarrow) {
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
                                       children: [
                                         _buildCurrentVisitSection(),
                                         const SizedBox(height: 24),
                                         _buildPreviousConsultationsSection(),
                                         const SizedBox(height: 24),
                                         _buildPreviousBillsSection(),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 24),
-
-                                  // Right side: Billing Form
-                                  Expanded(
-                                    flex: 4,
-                                    child: Column(
-                                      children: [
+                                        const SizedBox(height: 24),
                                         _buildInvoiceFormCard(),
                                       ],
-                                    ),
-                                  ),
-                                ],
+                                    );
+                                  } else {
+                                    return Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Left side: Timeline/History
+                                        Expanded(
+                                          flex: 3,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              _buildCurrentVisitSection(),
+                                              const SizedBox(height: 24),
+                                              _buildPreviousConsultationsSection(),
+                                              const SizedBox(height: 24),
+                                              _buildPreviousBillsSection(),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 24),
+
+                                        // Right side: Billing Form
+                                        Expanded(
+                                          flex: 4,
+                                          child: _buildInvoiceFormCard(),
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                },
                               ),
                             ],
                           ),
@@ -432,41 +448,58 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         p.fullName,
                         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 12),
                       Chip(
                         label: Text(p.gender, style: const TextStyle(fontSize: 12)),
                         backgroundColor: p.gender == 'Male' ? Colors.blue.shade100 : Colors.pink.shade100,
                       ),
-                      const SizedBox(width: 8),
                       Chip(
                         label: Text('${p.age ?? "N/A"} yrs'),
                         backgroundColor: Colors.grey.shade200,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 24,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(Icons.numbers, size: 16, color: Colors.teal.shade700),
-                      const SizedBox(width: 4),
-                      Text('Code: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(p.patientCode),
-                      const SizedBox(width: 24),
-                      Icon(Icons.phone, size: 16, color: Colors.teal.shade700),
-                      const SizedBox(width: 4),
-                      Text('Mobile: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(p.mobileNumber),
-                      const SizedBox(width: 24),
-                      Icon(Icons.cake, size: 16, color: Colors.teal.shade700),
-                      const SizedBox(width: 4),
-                      Text('DOB: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(p.dateOfBirth),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.numbers, size: 16, color: Colors.teal.shade700),
+                          const SizedBox(width: 4),
+                          const Text('Code: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(p.patientCode),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.phone, size: 16, color: Colors.teal.shade700),
+                          const SizedBox(width: 4),
+                          const Text('Mobile: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(p.mobileNumber),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.cake, size: 16, color: Colors.teal.shade700),
+                          const SizedBox(width: 4),
+                          const Text('DOB: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(p.dateOfBirth),
+                        ],
+                      ),
                     ],
                   ),
                 ],
