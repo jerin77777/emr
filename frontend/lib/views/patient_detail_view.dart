@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
+import '../utils/date_formatter.dart';
 import '../widgets/common_widgets.dart';
 import 'clinical_consultation_view.dart';
 import 'billing_view.dart';
@@ -89,7 +90,7 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('EMR Record - ${p.fullName} (${p.patientCode})'),
+        title: Text('EMR Record - ${p.fullName} (ID: ${p.patientCode})'),
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
@@ -219,7 +220,7 @@ class PatientHeaderCard extends StatelessWidget {
                   spacing: 24,
                   runSpacing: 8,
                   children: [
-                    PatientInfoBadge(icon: Icons.numbers, label: 'Patient Code', value: p.patientCode),
+                    PatientInfoBadge(icon: Icons.numbers, label: 'Patient ID', value: p.patientCode),
                     PatientInfoBadge(icon: Icons.phone, label: 'Mobile', value: p.mobileNumber),
                     PatientInfoBadge(icon: Icons.cake, label: 'DOB', value: p.dateOfBirth),
                     if (p.occupation != null && p.occupation!.isNotEmpty)
@@ -390,17 +391,8 @@ class _VisitCardState extends State<VisitCard> {
             title: Row(
               children: [
                 Text(
-                  'Visit: ${v.visitDate ?? "N/A"}',
+                  'Visit: ${DateFormatter.formatDate(v.visitDate)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(v.visitUuid, style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
                 ),
               ],
             ),
@@ -449,27 +441,32 @@ class _VisitCardState extends State<VisitCard> {
                 children: [
                   const Divider(),
                   if (v.chiefComplaint != null && v.chiefComplaint!.isNotEmpty)
-                    ClinicalSectionItem(title: 'a. Chief complaints', content: v.chiefComplaint!),
+                    ClinicalSectionItem(title: 'Chief Complaint', content: v.chiefComplaint!),
                   if (v.history != null && v.history!.isNotEmpty)
-                    ClinicalSectionItem(title: 'b. History of present illness', content: v.history!),
+                    ClinicalSectionItem(title: 'History', content: v.history!),
                   if (v.pastMedicalHistory != null && v.pastMedicalHistory!.isNotEmpty)
-                    ClinicalSectionItem(title: 'c. Past medical history', content: v.pastMedicalHistory!),
-                  ClinicalSectionItem(title: 'd. Vital signs', content: vitalsText),
+                    ClinicalSectionItem(title: 'Past Medical History', content: v.pastMedicalHistory!),
+                  VitalsPreviewBlock(bp: v.vitalsBp, pulse: v.vitalsPulse, temp: v.vitalsTemp, saturation: v.vitalsSaturation),
                   if (v.systemicExamination != null && v.systemicExamination!.isNotEmpty)
-                    ClinicalSectionItem(title: 'e. Systemic Examination', content: v.systemicExamination!),
+                    ClinicalSectionItem(title: 'Systemic Examination', content: v.systemicExamination!),
                   if (v.investigations != null && v.investigations!.isNotEmpty)
-                    ClinicalSectionItem(title: 'f. Investigations', content: v.investigations!),
-                  if (v.diagnosis != null && v.diagnosis!.isNotEmpty)
+                    ClinicalSectionItem(title: 'Investigations', content: v.investigations!),
+                  if (v.diagnoses != null && v.diagnoses!.isNotEmpty)
                     ClinicalSectionItem(
-                      title: 'g. Diagnosis',
+                      title: 'Diagnosis',
+                      content: v.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}').join(', '),
+                    )
+                  else if (v.diagnosis != null && v.diagnosis!.isNotEmpty)
+                    ClinicalSectionItem(
+                      title: 'Diagnosis',
                       content: '${v.diagnosis!}${v.diagnosisCode != null ? " (ICD-10: ${v.diagnosisCode})" : ""}',
                     ),
                   if (v.advice != null && v.advice!.isNotEmpty)
-                    ClinicalSectionItem(title: 'h. Advice', content: v.advice!),
+                    ClinicalSectionItem(title: 'Advice', content: v.advice!),
                   if (v.referralTo != null && v.referralTo!.isNotEmpty)
-                    ClinicalSectionItem(title: 'i. Referral to…', content: v.referralTo!),
+                    ClinicalSectionItem(title: 'Referral', content: v.referralTo!),
                   if (v.followupDate != null && v.followupDate!.isNotEmpty)
-                    ClinicalSectionItem(title: 'Follow-up Date', content: v.followupDate!),
+                    ClinicalSectionItem(title: 'Follow-up Date', content: DateFormatter.formatDate(v.followupDate!)),
                 ],
               ),
             ),
@@ -517,16 +514,204 @@ class ClinicalSectionItem extends StatelessWidget {
     required this.content,
   });
 
+  IconData _getIcon() {
+    switch (title) {
+      case 'Chief Complaint':
+        return Icons.report_problem;
+      case 'History':
+        return Icons.history_edu;
+      case 'Past Medical History':
+        return Icons.medical_services;
+      case 'Systemic Examination':
+        return Icons.accessibility_new;
+      case 'Investigations':
+        return Icons.science;
+      case 'Diagnosis':
+        return Icons.search;
+      case 'Advice':
+        return Icons.recommend;
+      case 'Referral':
+        return Icons.outbox;
+      case 'Follow-up Date':
+        return Icons.calendar_month;
+      default:
+        return Icons.article;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4FAF9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE4F3F2), width: 0.8),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$title:', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
-          const SizedBox(height: 2),
-          Text(content, style: TextStyle(color: Colors.grey.shade900)),
+          Row(
+            children: [
+              Icon(_getIcon(), size: 16, color: Colors.teal.shade700),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal.shade900,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 2),
+            child: Text(
+              content,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade900,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VitalCardItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const VitalCardItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      constraints: const BoxConstraints(minWidth: 120),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withAlpha(51), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VitalsPreviewBlock extends StatelessWidget {
+  final String? bp;
+  final String? pulse;
+  final String? temp;
+  final String? saturation;
+
+  const VitalsPreviewBlock({
+    super.key,
+    this.bp,
+    this.pulse,
+    this.temp,
+    this.saturation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedBp = VitalsFormatter.formatBp(bp, includePlaceholder: false);
+    final formattedPulse = VitalsFormatter.formatPulse(pulse, includePlaceholder: false);
+    final formattedTemp = VitalsFormatter.formatTemp(temp, includePlaceholder: false);
+    final formattedSaturation = VitalsFormatter.formatSaturation(saturation, includePlaceholder: false);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.monitor_heart, color: Colors.teal.shade700, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                'Vitals',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal.shade900,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              VitalCardItem(
+                icon: Icons.favorite,
+                label: 'Blood Pressure',
+                value: formattedBp.isEmpty ? 'N/A' : formattedBp,
+                color: Colors.red.shade600,
+              ),
+              VitalCardItem(
+                icon: Icons.heart_broken,
+                label: 'Pulse Rate',
+                value: formattedPulse.isEmpty ? 'N/A' : formattedPulse,
+                color: Colors.orange.shade700,
+              ),
+              VitalCardItem(
+                icon: Icons.thermostat,
+                label: 'Temperature',
+                value: formattedTemp.isEmpty ? 'N/A' : formattedTemp,
+                color: Colors.amber.shade800,
+              ),
+              VitalCardItem(
+                icon: Icons.air,
+                label: 'SpO2 Saturation',
+                value: formattedSaturation.isEmpty ? 'N/A' : formattedSaturation,
+                color: Colors.blue.shade700,
+              ),
+            ],
+          ),
         ],
       ),
     );

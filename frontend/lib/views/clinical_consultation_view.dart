@@ -25,6 +25,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   String? _selectedIcdCode;
   String? _selectedIcdName;
   final FocusNode _diagnosisFocusNode = FocusNode();
+  final List<ConsultationDiagnosis> _selectedDiagnoses = [];
 
   @override
   void initState() {
@@ -188,13 +189,21 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     final vitalsSat = _sanitizeInput(_vitalsSaturationController.text);
     final followup = _sanitizeInput(_followupDateController.text);
 
+    final List<ConsultationDiagnosis> diagnosesToSave = List.from(_selectedDiagnoses);
+    if (diag != null && !diagnosesToSave.any((d) => d.diagnosisName == diag)) {
+      diagnosesToSave.add(ConsultationDiagnosis(
+        icdCode: _selectedIcdCode ?? 'Custom',
+        diagnosisName: _selectedIcdName ?? diag,
+      ));
+    }
+
     // Require at least one clinical detail or vital sign
     if (chief == null &&
         history == null &&
         past == null &&
         sysExam == null &&
         inv == null &&
-        diag == null &&
+        diagnosesToSave.isEmpty &&
         advice == null &&
         referral == null &&
         vitalsBp == null &&
@@ -235,13 +244,14 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         vitalsSaturation: vitalsSat,
         systemicExamination: sysExam,
         investigations: inv,
-        diagnosis: diag,
-        diagnosisCode: _selectedIcdCode,
+        diagnosis: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.diagnosisName : null,
+        diagnosisCode: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.icdCode : null,
         advice: advice,
         referralTo: referral,
         followupDate: followup,
         visitDate: DateTime.now().toString().split('.')[0],
         syncStatus: 'pending',
+        diagnoses: diagnosesToSave,
       );
 
       final insertedId = await DatabaseHelper.instance.insertPatientVisit(visit);
@@ -275,6 +285,15 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       tempVal = '$tempVal $_tempUnit';
     }
 
+    final diag = _sanitizeInput(_diagnosisController.text);
+    final List<ConsultationDiagnosis> diagnosesToSave = List.from(_selectedDiagnoses);
+    if (diag != null && !diagnosesToSave.any((d) => d.diagnosisName == diag)) {
+      diagnosesToSave.add(ConsultationDiagnosis(
+        icdCode: _selectedIcdCode ?? 'Custom',
+        diagnosisName: _selectedIcdName ?? diag,
+      ));
+    }
+
     final tempVisit = PatientVisit(
       visitUuid: 'vst-draft',
       patientId: widget.patient.id ?? 0,
@@ -289,12 +308,13 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       vitalsSaturation: _sanitizeInput(_vitalsSaturationController.text),
       systemicExamination: _sanitizeInput(_systemicExamController.text),
       investigations: _sanitizeInput(_investigationsController.text),
-      diagnosis: _sanitizeInput(_diagnosisController.text),
-      diagnosisCode: _selectedIcdCode,
+      diagnosis: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.diagnosisName : null,
+      diagnosisCode: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.icdCode : null,
       advice: _sanitizeInput(_adviceController.text),
       referralTo: _sanitizeInput(_referralToController.text),
       followupDate: _sanitizeInput(_followupDateController.text),
       visitDate: DateTime.now().toString().split(' ')[0],
+      diagnoses: diagnosesToSave,
     );
 
     ConsultationPrintPreviewDialog.show(
@@ -361,7 +381,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Clinical Consultation - ${p.fullName} (${p.patientCode})'),
+        title: Text('Clinical Consultation - ${p.fullName} (ID: ${p.patientCode})'),
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
@@ -416,14 +436,14 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       const Divider(height: 24),
 
                       // a. Chief complaints
-                      _buildSectionHeader('a. Chief complaints', Icons.report_problem),
+                      _buildSectionHeader('Chief Complaint', Icons.report_problem),
                       _buildFreeTextField(
                         controller: _chiefComplaintController,
                         hintText: 'Enter chief complaints...',
                       ),
 
                       // b. History
-                      _buildSectionHeader('b. History', Icons.history_edu),
+                      _buildSectionHeader('History', Icons.history_edu),
                       _buildFreeTextField(
                         controller: _historyController,
                         hintText: 'Enter history of present illness / history...',
@@ -431,7 +451,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // c. Past history/Medical History
-                      _buildSectionHeader('c. Past history/Medical History', Icons.medical_services),
+                      _buildSectionHeader('Past Medical History', Icons.medical_services),
                       _buildFreeTextField(
                         controller: _pastHistoryController,
                         hintText: 'Enter past medical history, chronic conditions, surgeries, allergies...',
@@ -439,7 +459,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // d. Vitals signs (BP, Pulse, Temp. Saturation) entry separated.
-                      _buildSectionHeader('d. Vital signs', Icons.monitor_heart),
+                      _buildSectionHeader('Vitals', Icons.monitor_heart),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -511,7 +531,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // e. Systemic Examination
-                      _buildSectionHeader('e. Systemic Examination', Icons.accessibility_new),
+                      _buildSectionHeader('Systemic Examination', Icons.accessibility_new),
                       _buildFreeTextField(
                         controller: _systemicExamController,
                         hintText: 'Enter systemic examination findings...',
@@ -519,7 +539,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // f. Investigations
-                      _buildSectionHeader('f. Investigations', Icons.science),
+                      _buildSectionHeader('Investigations', Icons.science),
                       _buildFreeTextField(
                         controller: _investigationsController,
                         hintText: 'Enter investigations / lab test details...',
@@ -527,116 +547,187 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // g. Diagnosis
-                      _buildSectionHeader('g. Diagnosis (ICD-10 Search)', Icons.search),
-                      RawAutocomplete<Map<String, dynamic>>(
-                        textEditingController: _diagnosisController,
-                        focusNode: _diagnosisFocusNode,
-                        optionsBuilder: (TextEditingValue textEditingValue) async {
-                          if (textEditingValue.text.isEmpty) {
-                            return const Iterable<Map<String, dynamic>>.empty();
-                          }
-                          return await DatabaseHelper.instance.searchIcd10Diagnoses(textEditingValue.text);
-                        },
-                        displayStringForOption: (Map<String, dynamic> option) {
-                          return option['name_en'] ?? '';
-                        },
-                        optionsViewBuilder: (context, onSelected, options) {
-                          return Align(
-                            alignment: Alignment.topLeft,
-                            child: Material(
-                              elevation: 4.0,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                width: 500,
-                                constraints: const BoxConstraints(maxHeight: 250),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey.shade300),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  itemCount: options.length,
-                                  itemBuilder: (BuildContext context, int index) {
-                                    final option = options.elementAt(index);
-                                    final code = option['code'] ?? '';
-                                    final nameEn = option['name_en'] ?? '';
-                                    final nameId = option['name_id'] ?? '';
-                                    return ListTile(
-                                      title: RichText(
-                                        text: TextSpan(
-                                          children: [
-                                            TextSpan(
-                                              text: '$code - ',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.teal.shade700,
-                                              ),
-                                            ),
-                                            TextSpan(
-                                              text: nameEn,
-                                              style: const TextStyle(color: Colors.black87),
-                                            ),
-                                          ],
-                                        ),
+                      _buildSectionHeader('Diagnosis', Icons.search),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RawAutocomplete<Map<String, dynamic>>(
+                              textEditingController: _diagnosisController,
+                              focusNode: _diagnosisFocusNode,
+                              optionsBuilder: (TextEditingValue textEditingValue) async {
+                                if (textEditingValue.text.isEmpty) {
+                                  return const Iterable<Map<String, dynamic>>.empty();
+                                }
+                                return await DatabaseHelper.instance.searchIcd10Diagnoses(textEditingValue.text);
+                              },
+                              displayStringForOption: (Map<String, dynamic> option) {
+                                return option['name_en'] ?? '';
+                              },
+                              optionsViewBuilder: (context, onSelected, options) {
+                                return Align(
+                                  alignment: Alignment.topLeft,
+                                  child: Material(
+                                    elevation: 4.0,
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      width: 500,
+                                      constraints: const BoxConstraints(maxHeight: 250),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      subtitle: nameId.trim().isNotEmpty
-                                          ? Text(
-                                              nameId,
-                                              style: TextStyle(
-                                                color: Colors.grey.shade600,
-                                                fontSize: 12,
+                                      child: ListView.builder(
+                                        padding: EdgeInsets.zero,
+                                        shrinkWrap: true,
+                                        itemCount: options.length,
+                                        itemBuilder: (BuildContext context, int index) {
+                                          final option = options.elementAt(index);
+                                          final code = option['code'] ?? '';
+                                          final nameEn = option['name_en'] ?? '';
+                                          final nameId = option['name_id'] ?? '';
+                                          return ListTile(
+                                            title: RichText(
+                                              text: TextSpan(
+                                                children: [
+                                                  TextSpan(
+                                                    text: '$code - ',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.teal.shade700,
+                                                    ),
+                                                  ),
+                                                  TextSpan(
+                                                    text: nameEn,
+                                                    style: const TextStyle(color: Colors.black87),
+                                                  ),
+                                                ],
                                               ),
-                                            )
-                                          : null,
-                                      onTap: () => onSelected(option),
-                                    );
-                                  },
-                                ),
-                              ),
+                                            ),
+                                            subtitle: nameId.trim().isNotEmpty
+                                                ? Text(
+                                                    nameId,
+                                                    style: TextStyle(
+                                                      color: Colors.grey.shade600,
+                                                      fontSize: 12,
+                                                    ),
+                                                  )
+                                                : null,
+                                            onTap: () => onSelected(option),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                              fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                                return TextFormField(
+                                  controller: textEditingController,
+                                  focusNode: focusNode,
+                                  decoration: InputDecoration(
+                                    hintText: 'Type to search ICD-10 diagnoses, or enter custom...',
+                                    alignLabelWithHint: true,
+                                    border: const OutlineInputBorder(),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: Colors.teal.shade700, width: 2),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                    suffixIcon: textEditingController.text.isNotEmpty
+                                        ? IconButton(
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              setState(() {
+                                                textEditingController.clear();
+                                                _selectedIcdCode = null;
+                                                _selectedIcdName = null;
+                                              });
+                                            },
+                                          )
+                                        : null,
+                                  ),
+                                );
+                              },
+                              onSelected: (Map<String, dynamic> selection) {
+                                setState(() {
+                                  final code = selection['code'] ?? '';
+                                  final name = selection['name_en'] ?? '';
+                                  if (!_selectedDiagnoses.any((d) => d.icdCode == code)) {
+                                    _selectedDiagnoses.add(ConsultationDiagnosis(
+                                      icdCode: code,
+                                      diagnosisName: name,
+                                    ));
+                                  }
+                                  _diagnosisController.clear();
+                                  _selectedIcdCode = null;
+                                  _selectedIcdName = null;
+                                });
+                              },
                             ),
-                          );
-                        },
-                        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                          return TextFormField(
-                            controller: textEditingController,
-                            focusNode: focusNode,
-                            maxLines: null,
-                            decoration: InputDecoration(
-                              hintText: 'Type to search ICD-10 diagnoses, or enter custom diagnosis...',
-                              alignLabelWithHint: true,
-                              border: const OutlineInputBorder(),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: Colors.teal.shade700, width: 2),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey.shade50,
-                              suffixIcon: textEditingController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          textEditingController.clear();
-                                          _selectedIcdCode = null;
-                                          _selectedIcdName = null;
-                                        });
-                                      },
-                                    )
-                                  : null,
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             ),
-                          );
-                        },
-                        onSelected: (Map<String, dynamic> selection) {
-                          setState(() {
-                            _selectedIcdCode = selection['code'];
-                            _selectedIcdName = selection['name_en'];
-                            _diagnosisController.text = selection['name_en'] ?? '';
-                          });
-                        },
+                            onPressed: () {
+                              final text = _diagnosisController.text.trim();
+                              if (text.isNotEmpty) {
+                                setState(() {
+                                  if (!_selectedDiagnoses.any((d) => d.diagnosisName.toLowerCase() == text.toLowerCase())) {
+                                    _selectedDiagnoses.add(ConsultationDiagnosis(
+                                      icdCode: _selectedIcdCode ?? 'Custom',
+                                      diagnosisName: _selectedIcdName ?? text,
+                                    ));
+                                  }
+                                  _diagnosisController.clear();
+                                  _selectedIcdCode = null;
+                                  _selectedIcdName = null;
+                                });
+                              }
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add'),
+                          ),
+                        ],
                       ),
 
+                      if (_selectedDiagnoses.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey.shade50,
+                          ),
+                          child: Column(
+                            children: _selectedDiagnoses.map((diag) {
+                              return ListTile(
+                                dense: true,
+                                title: Text(
+                                  diag.icdCode == 'Custom'
+                                      ? diag.diagnosisName
+                                      : '${diag.icdCode} – ${diag.diagnosisName}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.red, size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedDiagnoses.remove(diag);
+                                    });
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+
                       // h. Advice
-                      _buildSectionHeader('h. Advice', Icons.recommend),
+                      _buildSectionHeader('Advice', Icons.recommend),
                       _buildFreeTextField(
                         controller: _adviceController,
                         hintText: 'Enter advice, prescriptions, dietary / lifestyle recommendations...',
@@ -644,7 +735,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // i. Referral to…
-                      _buildSectionHeader('i. Referral to…', Icons.outbox),
+                      _buildSectionHeader('Referral', Icons.outbox),
                       _buildFreeTextField(
                         controller: _referralToController,
                         hintText: 'Enter referral details...',
@@ -678,20 +769,40 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
                       const SizedBox(height: 24),
 
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal.shade700,
-                            foregroundColor: Colors.white,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal.shade700,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: _isSaving ? null : _saveConsultation,
+                                icon: _isSaving
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                    : const Icon(Icons.save),
+                                label: const Text('SAVE CLINICAL CONSULTATION', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
                           ),
-                          onPressed: _isSaving ? null : _saveConsultation,
-                          icon: _isSaving
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.save),
-                          label: const Text('SAVE CLINICAL CONSULTATION', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.teal.shade700, width: 2),
+                                  foregroundColor: Colors.teal.shade700,
+                                ),
+                                onPressed: _isSaving ? null : _previewPrintConsultation,
+                                icon: const Icon(Icons.print),
+                                label: const Text('PRINT', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

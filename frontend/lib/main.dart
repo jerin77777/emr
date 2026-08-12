@@ -8,6 +8,7 @@ import 'views/billing_dashboard_view.dart';
 import 'views/consultation_records_view.dart';
 import 'views/settings_backup_view.dart';
 import 'services/sync_service.dart';
+import 'utils/crypto_helper.dart';
 
 bool debug = true;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -348,7 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final matchedUser = users.firstWhere(
         (u) =>
             u.username == username &&
-            u.passwordHash == password &&
+            CryptoHelper.verifyPassword(password, u.passwordHash) &&
             u.isActive == 1,
         orElse: () => const User(
           id: -1,
@@ -581,12 +582,43 @@ class DashboardShell extends StatefulWidget {
 class DashboardShellState extends State<DashboardShell> {
   late String _activeSection;
   Patient? _preSelectedPatient;
+  List<String> _permissions = [];
+  bool _isLoadingPermissions = true;
 
   @override
   void initState() {
     super.initState();
     _activeSection = widget.initialSection ?? 'patients';
     _preSelectedPatient = widget.initialPreSelectedPatient;
+    _loadRolePermissions();
+  }
+
+  Future<void> _loadRolePermissions() async {
+    try {
+      final role = await DatabaseHelper.instance.getRoleByName(widget.currentUser.role);
+      if (role != null) {
+        final permStr = role.permissions?.toLowerCase() ?? '';
+        if (permStr == 'all' || permStr == 'all_permissions') {
+          _permissions = [
+            'dashboard',
+            'patients',
+            'consultations',
+            'prescriptions',
+            'billing',
+            'reports',
+            'settings',
+            'user management'
+          ];
+        } else {
+          _permissions = permStr.split(',').map((p) => p.trim()).toList();
+        }
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _isLoadingPermissions = false;
+      });
+    }
   }
 
   void navigateToSection(String section, {Patient? patient}) {
@@ -598,35 +630,51 @@ class DashboardShellState extends State<DashboardShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingPermissions) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
-    final hasBilling =
-        widget.currentUser.role.toLowerCase() == 'admin' ||
-        widget.currentUser.role.toLowerCase() == 'doctor';
+    final hasPatients = isAdmin || _permissions.contains('patients');
+    final hasConsultations = isAdmin || _permissions.contains('consultations');
+    final hasBilling = isAdmin || _permissions.contains('billing');
+    final hasUsers = isAdmin || _permissions.contains('user management');
+    final hasRoles = isAdmin || _permissions.contains('user management');
+    final hasSettings = isAdmin || _permissions.contains('settings');
 
     // Sidebar items
     final List<Map<String, dynamic>> menuItems = [
-      {'id': 'patients', 'title': 'Patient Directory', 'icon': Icons.people},
-      {
-        'id': 'consultations',
-        'title': 'Consultation Records',
-        'icon': Icons.history_edu,
-      },
+      if (hasPatients)
+        {'id': 'patients', 'title': 'Patient Directory', 'icon': Icons.people},
+      if (hasConsultations)
+        {
+          'id': 'consultations',
+          'title': 'Consultation Records',
+          'icon': Icons.history_edu,
+        },
       if (hasBilling)
         {
           'id': 'billing',
           'title': 'Billing & Invoices',
           'icon': Icons.receipt_long,
         },
-      if (isAdmin)
+      if (hasUsers)
         {
           'id': 'users',
           'title': 'User Management',
           'icon': Icons.manage_accounts,
         },
-      if (isAdmin)
+      if (hasRoles)
         {'id': 'roles', 'title': 'Role Management', 'icon': Icons.security},
-      {'id': 'settings', 'title': 'Settings & Backup', 'icon': Icons.settings},
+      if (hasSettings)
+        {'id': 'settings', 'title': 'Settings & Backup', 'icon': Icons.settings},
     ];
+
+    if (menuItems.isNotEmpty && !menuItems.any((item) => item['id'] == _activeSection)) {
+      _activeSection = menuItems.first['id'];
+    }
 
     Widget buildBody() {
       switch (_activeSection) {
@@ -997,13 +1045,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
   late TextEditingController _emailController;
   String _selectedRole = 'Doctor';
   List<Role> _availableRoles = [];
+  bool _obscurePassword = true;
 
   @override
   void initState() {
     super.initState();
     final u = widget.existingUser;
     _usernameController = TextEditingController(text: u?.username ?? '');
-    _passwordController = TextEditingController(text: u?.passwordHash ?? '');
+    _passwordController = TextEditingController(text: u != null ? '******' : '');
     _fullNameController = TextEditingController(text: u?.fullName ?? '');
     _specController = TextEditingController(text: u?.specialization ?? '');
     _licenseController = TextEditingController(text: u?.licenseNumber ?? '');
@@ -1028,13 +1077,25 @@ class _UserFormDialogState extends State<UserFormDialog> {
   Future<void> _saveUser() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final enteredPassword = _passwordController.text.trim();
+    String passwordHashToSave;
+    if (widget.existingUser != null) {
+      if (enteredPassword == '******' || enteredPassword.isEmpty) {
+        passwordHashToSave = widget.existingUser!.passwordHash;
+      } else {
+        passwordHashToSave = CryptoHelper.hashPassword(enteredPassword);
+      }
+    } else {
+      passwordHashToSave = CryptoHelper.hashPassword(enteredPassword);
+    }
+
     final user = User(
       id: widget.existingUser?.id,
       userUuid:
           widget.existingUser?.userUuid ??
           'usr-${DateTime.now().millisecondsSinceEpoch}',
       username: _usernameController.text.trim(),
-      passwordHash: _passwordController.text.trim(),
+      passwordHash: passwordHashToSave,
       fullName: _fullNameController.text.trim(),
       specialization: _specController.text.trim().isEmpty
           ? null
@@ -1084,8 +1145,18 @@ class _UserFormDialogState extends State<UserFormDialog> {
                 ),
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password *'),
-                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: widget.existingUser != null ? 'Password (leave as ****** to keep unchanged) *' : 'Password *',
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: _obscurePassword,
                   validator: (v) => v!.isEmpty ? 'Password required' : null,
                 ),
                 TextFormField(
@@ -1317,7 +1388,17 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descController;
-  late TextEditingController _permController;
+  final List<String> _allPermissionsList = [
+    'Dashboard',
+    'Patients',
+    'Consultations',
+    'Prescriptions',
+    'Billing',
+    'Reports',
+    'Settings',
+    'User Management'
+  ];
+  List<String> _selectedPerms = [];
 
   @override
   void initState() {
@@ -1325,11 +1406,29 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
     final r = widget.existingRole;
     _nameController = TextEditingController(text: r?.roleName ?? '');
     _descController = TextEditingController(text: r?.description ?? '');
-    _permController = TextEditingController(text: r?.permissions ?? '');
+    
+    final initialPerms = r?.permissions ?? '';
+    if (initialPerms.toLowerCase() == 'all') {
+      _selectedPerms = List.from(_allPermissionsList);
+    } else {
+      _selectedPerms = initialPerms
+          .split(',')
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .map((p) {
+            return _allPermissionsList.firstWhere(
+              (item) => item.toLowerCase() == p.toLowerCase(),
+              orElse: () => p,
+            );
+          })
+          .toList();
+    }
   }
 
   Future<void> _saveRole() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final String permissionsString = _selectedPerms.map((p) => p.toLowerCase()).join(',');
 
     final role = Role(
       id: widget.existingRole?.id,
@@ -1337,9 +1436,7 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
       description: _descController.text.trim().isEmpty
           ? null
           : _descController.text.trim(),
-      permissions: _permController.text.trim().isEmpty
-          ? null
-          : _permController.text.trim(),
+      permissions: permissionsString.isEmpty ? 'none' : permissionsString,
     );
 
     if (widget.existingRole == null) {
@@ -1376,11 +1473,35 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
                   controller: _descController,
                   decoration: const InputDecoration(labelText: 'Description'),
                 ),
-                TextFormField(
-                  controller: _permController,
-                  decoration: const InputDecoration(
-                    labelText:
-                        'Permissions (comma-separated, e.g. clinical,billing)',
+                const SizedBox(height: 16),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Permissions:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: _allPermissionsList.map((perm) {
+                      final isChecked = _selectedPerms.contains(perm);
+                      return CheckboxListTile(
+                        title: Text(perm, style: const TextStyle(fontSize: 13)),
+                        dense: true,
+                        value: isChecked,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedPerms.add(perm);
+                            } else {
+                              _selectedPerms.remove(perm);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
                 ),
               ],

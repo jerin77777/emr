@@ -290,6 +290,7 @@ class PatientVisit {
   final String? followupDate;
   final String? syncStatus;
   final String? createdAt;
+  final List<ConsultationDiagnosis>? diagnoses;
 
   const PatientVisit({
     this.id,
@@ -314,6 +315,7 @@ class PatientVisit {
     this.followupDate,
     this.syncStatus,
     this.createdAt,
+    this.diagnoses,
   });
 
   factory PatientVisit.fromMap(Map<String, dynamic> map) {
@@ -393,6 +395,7 @@ class PatientVisit {
     String? followupDate,
     String? syncStatus,
     String? createdAt,
+    List<ConsultationDiagnosis>? diagnoses,
   }) {
     return PatientVisit(
       id: id ?? this.id,
@@ -417,6 +420,7 @@ class PatientVisit {
       followupDate: followupDate ?? this.followupDate,
       syncStatus: syncStatus ?? this.syncStatus,
       createdAt: createdAt ?? this.createdAt,
+      diagnoses: diagnoses ?? this.diagnoses,
     );
   }
 
@@ -428,6 +432,38 @@ class PatientVisit {
       saturation: vitalsSaturation,
       includePlaceholders: includePlaceholders,
     );
+  }
+}
+
+class ConsultationDiagnosis {
+  final int? id;
+  final int? visitId;
+  final String icdCode;
+  final String diagnosisName;
+
+  const ConsultationDiagnosis({
+    this.id,
+    this.visitId,
+    required this.icdCode,
+    required this.diagnosisName,
+  });
+
+  factory ConsultationDiagnosis.fromMap(Map<String, dynamic> map) {
+    return ConsultationDiagnosis(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      visitId: map['visit_id'] != null ? (map['visit_id'] as num).toInt() : null,
+      icdCode: map['icd_code'] as String? ?? '',
+      diagnosisName: map['diagnosis_name'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'visit_id': visitId,
+      'icd_code': icdCode,
+      'diagnosis_name': diagnosisName,
+    };
   }
 }
 

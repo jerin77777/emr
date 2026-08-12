@@ -107,7 +107,7 @@ class _PatientManagementViewState extends State<PatientManagementView> {
                     onChanged: (v) => _loadPatients(),
                     decoration: InputDecoration(
                       hintText:
-                          'Search patients by Name, Patient Code (PAT-2026-XXX), or Mobile...',
+                          'Search patients by Name, Patient ID, or Mobile...',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(

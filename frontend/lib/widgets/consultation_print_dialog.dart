@@ -7,14 +7,13 @@ import 'package:printing/printing.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/document_pdf_generator.dart';
+import '../utils/date_formatter.dart';
 
 /// Helper function to format a consultation record into a standard printable document string.
 String generateConsultationPrintText({
   required String patientName,
   required String patientCode,
-  required String patientMobile,
   String? visitDate,
-  String? visitUuid,
   String? doctorName,
   String? chiefComplaint,
   String? history,
@@ -25,6 +24,7 @@ String generateConsultationPrintText({
   String? vitalsSaturation,
   String? systemicExamination,
   String? investigations,
+  List<ConsultationDiagnosis>? diagnoses,
   String? diagnosis,
   String? diagnosisCode,
   String? advice,
@@ -47,12 +47,8 @@ String generateConsultationPrintText({
       : '                  CLINIC VISIT RECORD');
   buffer.writeln('======================================================');
   buffer.writeln('Patient Name  : $patientName');
-  buffer.writeln('Patient Code  : $patientCode');
-  buffer.writeln('Mobile Number : $patientMobile');
-  buffer.writeln('Visit Date    : ${visitDate ?? "N/A"}');
-  if (visitUuid != null && visitUuid.isNotEmpty) {
-    buffer.writeln('Visit UUID    : $visitUuid');
-  }
+  buffer.writeln('Patient ID    : $patientCode');
+  buffer.writeln('Visit Date    : ${DateFormatter.formatDate(visitDate)}');
   if (doctorName != null && doctorName.isNotEmpty) {
     buffer.writeln('Consultant    : $doctorName');
   }
@@ -89,9 +85,15 @@ String generateConsultationPrintText({
   }
 
   buffer.writeln('DIAGNOSIS:');
-  final diagStr = diagnosis != null && diagnosis.trim().isNotEmpty ? diagnosis : 'None documented';
-  final codeStr = diagnosisCode != null && diagnosisCode.trim().isNotEmpty ? ' ($diagnosisCode)' : '';
-  buffer.writeln('$diagStr$codeStr');
+  if (diagnoses != null && diagnoses.isNotEmpty) {
+    for (final d in diagnoses) {
+      buffer.writeln(d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}');
+    }
+  } else {
+    final diagStr = diagnosis != null && diagnosis.trim().isNotEmpty ? diagnosis : 'None documented';
+    final codeStr = diagnosisCode != null && diagnosisCode.trim().isNotEmpty ? ' ($diagnosisCode)' : '';
+    buffer.writeln('$diagStr$codeStr');
+  }
   buffer.writeln();
 
   buffer.writeln('ADVICE & PRESCRIPTION:');
@@ -105,7 +107,7 @@ String generateConsultationPrintText({
   }
 
   buffer.writeln('FOLLOW-UP DATE:');
-  buffer.writeln(followupDate != null && followupDate.trim().isNotEmpty ? followupDate : 'None');
+  buffer.writeln(followupDate != null && followupDate.trim().isNotEmpty ? DateFormatter.formatDate(followupDate) : 'None');
   buffer.writeln('------------------------------------------------------');
   buffer.writeln('Generated via Clinic EMR - Cloud Synced Backup');
   buffer.writeln('======================================================');
@@ -144,9 +146,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
     final content = generateConsultationPrintText(
       patientName: patient.fullName,
       patientCode: patient.patientCode,
-      patientMobile: patient.mobileNumber,
       visitDate: visit.visitDate,
-      visitUuid: visit.visitUuid,
       chiefComplaint: visit.chiefComplaint,
       history: visit.history,
       pastMedicalHistory: visit.pastMedicalHistory,
@@ -156,6 +156,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
       vitalsSaturation: visit.vitalsSaturation,
       systemicExamination: visit.systemicExamination,
       investigations: visit.investigations,
+      diagnoses: visit.diagnoses,
       diagnosis: visit.diagnosis,
       diagnosisCode: visit.diagnosisCode,
       advice: visit.advice,
@@ -165,7 +166,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
     );
     return ConsultationPrintPreviewDialog(
       key: key,
-      title: title ?? (isDraft ? 'Consultation Draft Preview' : 'Consultation Record Preview - ${visit.visitUuid.substring(0, 8)}...'),
+      title: title ?? (isDraft ? 'Consultation Draft Preview' : 'Consultation Record Preview'),
       printContent: content,
       patient: patient,
       visit: visit,
@@ -216,10 +217,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
     final content = generateConsultationPrintText(
       patientName: patient.fullName,
       patientCode: patient.patientCode,
-      patientMobile: patient.mobileNumber,
       visitDate: visit.visitDate,
-      visitUuid: visit.visitUuid,
-      doctorName: record['doctor_name']?.toString(),
       chiefComplaint: visit.chiefComplaint,
       history: visit.history,
       pastMedicalHistory: visit.pastMedicalHistory,
@@ -261,6 +259,49 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
 
 class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPreviewDialog> {
   bool _isPrinting = false;
+  String _clinicName = 'Anything EMR Clinic';
+  String _clinicAddress = '123 Health Ave, Medical City';
+  String _clinicPhone = '+1-555-0199';
+  String _clinicEmail = 'contact@anythingemr.com';
+  String _clinicLicense = 'REG-2026-9923';
+  List<ConsultationDiagnosis> _diagnoses = [];
+  String? _doctorName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClinicSettings();
+  }
+
+  Future<void> _loadClinicSettings() async {
+    try {
+      final name = await DatabaseHelper.instance.getSetting('clinic_name');
+      final address = await DatabaseHelper.instance.getSetting('clinic_address');
+      final phone = await DatabaseHelper.instance.getSetting('clinic_phone');
+      final email = await DatabaseHelper.instance.getSetting('clinic_email');
+      final license = await DatabaseHelper.instance.getSetting('clinic_license');
+      
+      final diags = await DatabaseHelper.instance.getDiagnosesForVisit(widget.visit.id ?? 0);
+
+      String? docName;
+      if (widget.visit.doctorId != null) {
+        final docUser = await DatabaseHelper.instance.getUserById(widget.visit.doctorId!);
+        docName = docUser?.fullName;
+      }
+
+      if (mounted) {
+        setState(() {
+          if (name != null) _clinicName = name;
+          if (address != null) _clinicAddress = address;
+          if (phone != null) _clinicPhone = phone;
+          if (email != null) _clinicEmail = email;
+          if (license != null) _clinicLicense = license;
+          _diagnoses = diags;
+          _doctorName = docName;
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _handleNativePrint() async {
     setState(() => _isPrinting = true);
@@ -268,30 +309,23 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
     final navigator = Navigator.of(context);
 
     try {
-      // 1. Fetch Doctor info if available
-      String? doctorName;
-      if (widget.visit.doctorId != null) {
-        final docUser = await DatabaseHelper.instance.getUserById(widget.visit.doctorId!);
-        doctorName = docUser?.fullName;
-      }
-
-      // 2. Generate PDF bytes
+      // Generate PDF bytes
       final pdfBytes = await DocumentPdfGenerator.generateConsultationPdf(
         patient: widget.patient,
-        visit: widget.visit,
-        doctorName: doctorName,
+        visit: widget.visit.copyWith(diagnoses: _diagnoses.isNotEmpty ? _diagnoses : widget.visit.diagnoses),
+        doctorName: _doctorName,
       );
 
-      // 3. Open System Native Print Preview & Dialog
+      // Open System Native Print Preview & Dialog
       final printed = await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdfBytes,
-        name: 'Consultation_${widget.visit.visitUuid}.pdf',
+        name: 'Consultation_${widget.visit.id ?? "draft"}.pdf',
       );
 
-      // 4. Save Copy Locally and Record in SQLite (only if not a draft)
+      // Save Copy Locally and Record in SQLite (only if not a draft)
       if (printed && !widget.isDraft) {
         final dirPath = await DatabaseHelper.getPatientDocumentsDir(widget.patient.patientUuid, 'consultations');
-        final fileName = 'Consultation_${widget.visit.visitUuid}.pdf';
+        final fileName = 'Consultation_${widget.visit.id ?? DateTime.now().millisecondsSinceEpoch}.pdf';
         final filePath = path.join(dirPath, fileName);
 
         // Write PDF file to app support path
@@ -337,8 +371,67 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
     }
   }
 
+  Widget _previewInfoRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.black54)),
+        Expanded(child: Text(value, style: const TextStyle(fontSize: 10, color: Colors.black87))),
+      ],
+    );
+  }
+
+  Widget _previewSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+      ),
+    );
+  }
+
+  Widget _previewClinicalBlock(String label, String? content) {
+    if (content == null || content.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.black54)),
+          const SizedBox(height: 1),
+          Text(content, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewTableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.black87),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _previewTableCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 9, color: Colors.black87),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final finalDiagnoses = _diagnoses.isNotEmpty ? _diagnoses : (widget.visit.diagnoses ?? []);
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
@@ -360,29 +453,187 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('This document is formatted and ready for printing:'),
-          const SizedBox(height: 12),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 300),
-            width: 500,
-            padding: const EdgeInsets.all(12),
+      content: Container(
+        constraints: const BoxConstraints(maxHeight: 500),
+        width: 600,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: SingleChildScrollView(
+          child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: const [
+                BoxShadow(color: Colors.black12, blurRadius: 4, spreadRadius: 1),
+              ],
             ),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                widget.printContent,
-                style: const TextStyle(fontFamily: 'Courier', fontSize: 11),
-              ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Clinic Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_clinicName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
+                          const SizedBox(height: 4),
+                          Text(_clinicAddress, style: TextStyle(fontSize: 11, color: Colors.grey.shade800)),
+                          Text('Phone: $_clinicPhone | Email: $_clinicEmail', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                          Text('Reg/License No: $_clinicLicense', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 70,
+                      height: 35,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('LOGO', style: TextStyle(fontSize: 8, color: Colors.grey), textAlign: TextAlign.center),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Divider(thickness: 1.5, color: Colors.teal.shade700),
+                const SizedBox(height: 8),
+
+                // 2. Title
+                Center(
+                  child: Text(
+                    widget.isDraft ? 'CLINIC VISIT RECORD DRAFT' : 'CLINIC VISIT RECORD',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.teal.shade900),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 3. Patient Info Grid
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _previewInfoRow('Patient Name', widget.patient.fullName)),
+                          Expanded(child: _previewInfoRow('Patient ID', widget.patient.patientCode)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(child: _previewInfoRow('Age / Gender', '${widget.patient.age ?? "N/A"} yrs / ${widget.patient.gender}')),
+                          Expanded(child: _previewInfoRow('Date of Birth', DateFormatter.formatDate(widget.patient.dateOfBirth))),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(child: _previewInfoRow('Consultation Date', DateFormatter.formatDate(widget.visit.visitDate))),
+                          Expanded(child: _previewInfoRow('Consultant Doctor', _doctorName ?? 'N/A')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 4. Clinical Details Section
+                _previewSectionHeader('1. CLINICAL SYMPTOMS & HISTORY'),
+                _previewClinicalBlock('Chief Complaint', widget.visit.chiefComplaint),
+                _previewClinicalBlock('History of Present Illness', widget.visit.history),
+                _previewClinicalBlock('Past Medical History', widget.visit.pastMedicalHistory),
+
+                // 5. Vitals Section
+                _previewSectionHeader('2. VITAL SIGNS & MEASUREMENTS'),
+                const SizedBox(height: 6),
+                Table(
+                  border: TableBorder.all(color: Colors.grey.shade300, width: 0.5),
+                  children: [
+                    TableRow(
+                      decoration: BoxDecoration(color: Colors.grey.shade100),
+                      children: [
+                        _previewTableHeaderCell('BP (mmHg)'),
+                        _previewTableHeaderCell('Pulse (bpm)'),
+                        _previewTableHeaderCell('Temp'),
+                        _previewTableHeaderCell('SPO2 (%)'),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        _previewTableCell(VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false)),
+                        _previewTableCell(VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false)),
+                        _previewTableCell(VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false)),
+                        _previewTableCell(VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false)),
+                      ],
+                    ),
+                  ],
+                ),
+
+                // 6. Examination & Investigations
+                _previewSectionHeader('3. EXAMINATION & INVESTIGATIONS'),
+                _previewClinicalBlock('Systemic Examination', widget.visit.systemicExamination),
+                _previewClinicalBlock('Investigations Ordered', widget.visit.investigations),
+
+                // 7. Diagnosis & Plan
+                _previewSectionHeader('4. DIAGNOSIS & PRESCRIPTION PLAN'),
+                _previewClinicalBlock(
+                  'Diagnosis',
+                  finalDiagnoses.isNotEmpty
+                      ? finalDiagnoses.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}').join('\n')
+                      : (widget.visit.diagnosis != null && widget.visit.diagnosis!.isNotEmpty
+                          ? '${widget.visit.diagnosis!}${widget.visit.diagnosisCode != null ? " (ICD-10: ${widget.visit.diagnosisCode})" : ""}'
+                          : null),
+                ),
+                _previewClinicalBlock('Advice & Prescriptions', widget.visit.advice),
+                _previewClinicalBlock('Referral To', widget.visit.referralTo),
+                _previewClinicalBlock('Follow-up Date', DateFormatter.formatDate(widget.visit.followupDate)),
+                
+                const SizedBox(height: 24),
+
+                // 8. Sign-off Section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Generated by: Clinic ERP Portal', style: TextStyle(fontSize: 8, color: Colors.grey.shade600)),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 120,
+                          decoration: BoxDecoration(
+                            border: Border(bottom: BorderSide(color: Colors.grey.shade400, width: 0.8)),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Doctor\'s Authorized Signature', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                        if (_doctorName != null)
+                          Text(_doctorName!, style: TextStyle(fontSize: 8, color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
       actions: [
         TextButton.icon(

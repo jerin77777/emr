@@ -393,6 +393,37 @@ class DatabaseHelper {
         await db.execute('''CREATE INDEX IF NOT EXISTS "idx_documents_patient" ON "documents" ("patient_id");''');
         await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_documents_uuid" ON "documents" ("document_uuid");''');
       }
+
+      // Create consultation_diagnoses table
+      await db.execute('''CREATE TABLE IF NOT EXISTS "consultation_diagnoses" (
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "visit_id" INTEGER NOT NULL,
+        "icd_code" TEXT NOT NULL,
+        "diagnosis_name" TEXT NOT NULL,
+        FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE
+      );''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_consultation_diagnoses_visit" ON "consultation_diagnoses" ("visit_id");''');
+
+      // Create performance indexes
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_bills_visit" ON "bills" ("visit_id");''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_doctor" ON "patient_visits" ("doctor_id");''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_followup" ON "patient_visits" ("followup_date");''');
+
+      // Migrate legacy diagnosis data to consultation_diagnoses if missing
+      final legacyVisits = await db.rawQuery('SELECT id, diagnosis, diagnosis_code FROM patient_visits WHERE diagnosis IS NOT NULL AND diagnosis != ""');
+      for (final v in legacyVisits) {
+        final visitId = v['id'] as int;
+        final diag = v['diagnosis'] as String;
+        final code = v['diagnosis_code'] as String? ?? '';
+        
+        final exists = await db.rawQuery('SELECT id FROM consultation_diagnoses WHERE visit_id = ?', [visitId]);
+        if (exists.isEmpty) {
+          await db.rawInsert(
+            'INSERT INTO consultation_diagnoses (visit_id, icd_code, diagnosis_name) VALUES (?, ?, ?)',
+            [visitId, code, diag]
+          );
+        }
+      }
     } catch (_) {}
   }
 
@@ -565,6 +596,22 @@ class DatabaseHelper {
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_documents_patient" ON "documents" ("patient_id");''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_documents_uuid" ON "documents" ("document_uuid");''');
+    
+    // Create consultation_diagnoses table
+    await db.execute('''CREATE TABLE IF NOT EXISTS "consultation_diagnoses" (
+      "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+      "visit_id" INTEGER NOT NULL,
+      "icd_code" TEXT NOT NULL,
+      "diagnosis_name" TEXT NOT NULL,
+      FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE CASCADE
+    );''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_consultation_diagnoses_visit" ON "consultation_diagnoses" ("visit_id");''');
+
+    // Performance indexes
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_bills_visit" ON "bills" ("visit_id");''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_doctor" ON "patient_visits" ("doctor_id");''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_followup" ON "patient_visits" ("followup_date");''');
+
     await _seedInitialData(db);
   }
 
@@ -590,6 +637,16 @@ class DatabaseHelper {
   Future<Role?> getRoleById(int id) async {
     final db = await instance.database;
     final maps = await db.query('roles', where: 'id = ?', whereArgs: [id]);
+    if (maps.isNotEmpty) {
+      return Role.fromMap(maps.first);
+    } else {
+      return null;
+    }
+  }
+
+  Future<Role?> getRoleByName(String roleName) async {
+    final db = await instance.database;
+    final maps = await db.query('roles', where: 'role_name = ?', whereArgs: [roleName]);
     if (maps.isNotEmpty) {
       return Role.fromMap(maps.first);
     } else {
@@ -674,20 +731,40 @@ class DatabaseHelper {
   // === PatientVisit CRUD Operations ===
   Future<int> insertPatientVisit(PatientVisit patientVisit) async {
     final db = await instance.database;
-    return await db.insert('patient_visits', patientVisit.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final id = await db.insert('patient_visits', patientVisit.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    
+    // Save multiple diagnoses
+    if (patientVisit.diagnoses != null) {
+      for (final diag in patientVisit.diagnoses!) {
+        await db.insert('consultation_diagnoses', {
+          'visit_id': id,
+          'icd_code': diag.icdCode,
+          'diagnosis_name': diag.diagnosisName,
+        });
+      }
+    }
+    return id;
   }
 
   Future<List<PatientVisit>> getAllPatientVisits() async {
     final db = await instance.database;
     final result = await db.query('patient_visits');
-    return result.map((json) => PatientVisit.fromMap(json)).toList();
+    final visits = <PatientVisit>[];
+    for (final json in result) {
+      final visit = PatientVisit.fromMap(json);
+      final diags = await getDiagnosesForVisit(visit.id!);
+      visits.add(visit.copyWith(diagnoses: diags));
+    }
+    return visits;
   }
 
   Future<PatientVisit?> getPatientVisitById(int id) async {
     final db = await instance.database;
     final maps = await db.query('patient_visits', where: 'id = ?', whereArgs: [id]);
     if (maps.isNotEmpty) {
-      return PatientVisit.fromMap(maps.first);
+      final visit = PatientVisit.fromMap(maps.first);
+      final diags = await getDiagnosesForVisit(visit.id!);
+      return visit.copyWith(diagnoses: diags);
     } else {
       return null;
     }
@@ -695,12 +772,30 @@ class DatabaseHelper {
 
   Future<int> updatePatientVisit(PatientVisit patientVisit) async {
     final db = await instance.database;
-    return await db.update('patient_visits', patientVisit.toMap(), where: 'id = ?', whereArgs: [patientVisit.id]);
+    final rows = await db.update('patient_visits', patientVisit.toMap(), where: 'id = ?', whereArgs: [patientVisit.id]);
+    
+    if (patientVisit.diagnoses != null && patientVisit.id != null) {
+      await db.delete('consultation_diagnoses', where: 'visit_id = ?', whereArgs: [patientVisit.id]);
+      for (final diag in patientVisit.diagnoses!) {
+        await db.insert('consultation_diagnoses', {
+          'visit_id': patientVisit.id,
+          'icd_code': diag.icdCode,
+          'diagnosis_name': diag.diagnosisName,
+        });
+      }
+    }
+    return rows;
   }
 
   Future<int> deletePatientVisit(int id) async {
     final db = await instance.database;
     return await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<ConsultationDiagnosis>> getDiagnosesForVisit(int visitId) async {
+    final db = await instance.database;
+    final result = await db.query('consultation_diagnoses', where: 'visit_id = ?', whereArgs: [visitId]);
+    return result.map((json) => ConsultationDiagnosis.fromMap(json)).toList();
   }
 
   // === Bill CRUD Operations ===
@@ -917,7 +1012,13 @@ class DatabaseHelper {
   Future<List<PatientVisit>> getVisitsForPatient(int patientId) async {
     final db = await instance.database;
     final result = await db.query('patient_visits', where: 'patient_id = ?', whereArgs: [patientId], orderBy: 'id DESC');
-    return result.map((json) => PatientVisit.fromMap(json)).toList();
+    final visits = <PatientVisit>[];
+    for (final json in result) {
+      final visit = PatientVisit.fromMap(json);
+      final diags = await getDiagnosesForVisit(visit.id!);
+      visits.add(visit.copyWith(diagnoses: diags));
+    }
+    return visits;
   }
 
   Future<List<Bill>> getBillsForPatient(int patientId) async {
@@ -944,7 +1045,7 @@ class DatabaseHelper {
     final maxId = (result.first['max_id'] as num?)?.toInt() ?? 0;
     final nextId = maxId + 1;
     final year = DateTime.now().year;
-    return 'PAT-$year-${nextId.toString().padLeft(3, '0')}';
+    return '$year${nextId.toString().padLeft(4, '0')}';
   }
 
   Future<String> generateNextBillNumber() async {
@@ -1020,8 +1121,13 @@ class DatabaseHelper {
         OR LOWER(p.mobile_number) LIKE ? 
         OR LOWER(v.visit_uuid) LIKE ? 
         OR LOWER(v.diagnosis) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM consultation_diagnoses cd 
+          WHERE cd.visit_id = v.id 
+            AND (LOWER(cd.icd_code) LIKE ? OR LOWER(cd.diagnosis_name) LIKE ?)
+        )
       )''';
-      whereArgs.addAll([q, q, q, q, q]);
+      whereArgs.addAll([q, q, q, q, q, q, q]);
     }
 
     if (startDate != null && startDate.isNotEmpty) {
@@ -1061,7 +1167,12 @@ class DatabaseHelper {
         p.patient_uuid as patient_uuid,
         u.full_name as doctor_name,
         COALESCE(b.payment_status, 'Unbilled') as bill_status,
-        b.id as bill_id
+        b.id as bill_id,
+        (
+          SELECT GROUP_CONCAT(cd.icd_code || ' – ' || cd.diagnosis_name, ', ')
+          FROM consultation_diagnoses cd
+          WHERE cd.visit_id = v.id
+        ) as diagnosis
       FROM patient_visits v
       JOIN patients p ON v.patient_id = p.id
       LEFT JOIN users u ON v.doctor_id = u.id
@@ -1094,8 +1205,13 @@ class DatabaseHelper {
         OR LOWER(p.mobile_number) LIKE ? 
         OR LOWER(v.visit_uuid) LIKE ? 
         OR LOWER(v.diagnosis) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM consultation_diagnoses cd 
+          WHERE cd.visit_id = v.id 
+            AND (LOWER(cd.icd_code) LIKE ? OR LOWER(cd.diagnosis_name) LIKE ?)
+        )
       )''';
-      whereArgs.addAll([q, q, q, q, q]);
+      whereArgs.addAll([q, q, q, q, q, q, q]);
     }
 
     if (startDate != null && startDate.isNotEmpty) {

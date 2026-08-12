@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../utils/date_formatter.dart';
 import '../widgets/common_widgets.dart';
 
 class ConsultationRecordsView extends StatefulWidget {
@@ -152,7 +153,7 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Consultation Visit Details', style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold)),
+              Text('Consultation Visit Details', style: TextStyle(color: Colors.teal.shade900, fontWeight: FontWeight.bold, fontSize: 18)),
               IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.pop(context),
@@ -165,29 +166,42 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Meta Info Row
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Visit ID: ${record['visit_uuid'].toString().substring(0, 8)}...', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text('Date: ${record['visit_date'] ?? "N/A"}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      ],
-                    ),
+                  // Simplified Patient & Doctor Header card with Date on the right
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(record['patient_name'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            const SizedBox(height: 4),
+                            Text('Patient ID: ${record['patient_code'] ?? 'N/A'}', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                            const SizedBox(height: 2),
+                            Text('Doctor: ${record['doctor_name'] ?? 'N/A'}', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              DateFormatter.formatDate(record['visit_date']),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Patient Info
-                  _detailField('Patient Name', record['patient_name'] ?? 'N/A'),
-                  _detailField('Patient Code', record['patient_code'] ?? 'N/A'),
-                  _detailField('Patient Mobile', record['patient_mobile'] ?? 'N/A'),
-                  _detailField('Consulting Doctor', record['doctor_name'] ?? 'N/A'),
-                  const Divider(height: 24),
+                  const Divider(height: 32),
 
                   // Clinical Details
                   if (record['chief_complaint']?.isNotEmpty == true)
@@ -196,13 +210,13 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
                     _detailField('History', record['history']),
                   _detailField('Vital Signs', formattedVitals),
                   if (record['diagnosis']?.isNotEmpty == true)
-                    _detailField('Diagnosis', "${record['diagnosis']}${record['diagnosis_code'] != null ? ' (ICD-10: ${record['diagnosis_code']})' : ''}"),
+                    _detailField('Diagnosis', record['diagnosis']),
                   if (record['advice']?.isNotEmpty == true)
                     _detailField('Advice & Prescriptions', record['advice']),
                   if (record['referral_to']?.isNotEmpty == true)
                     _detailField('Referral To', record['referral_to']),
                   if (record['followup_date']?.isNotEmpty == true)
-                    _detailField('Follow-up Date', record['followup_date']),
+                    _detailField('Follow-up Date', DateFormatter.formatDate(record['followup_date'])),
                   const Divider(height: 24),
                   
                   // Billing status
@@ -459,7 +473,7 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
                                           decoration: BoxDecoration(color: Colors.teal.shade50),
                                           children: const [
                                             Padding(padding: EdgeInsets.all(12), child: Text('Visit Date', style: TextStyle(fontWeight: FontWeight.bold))),
-                                            Padding(padding: EdgeInsets.all(12), child: Text('ID Code', style: TextStyle(fontWeight: FontWeight.bold))),
+                                            Padding(padding: EdgeInsets.all(12), child: Text('Patient ID', style: TextStyle(fontWeight: FontWeight.bold))),
                                             Padding(padding: EdgeInsets.all(12), child: Text('Patient Name', style: TextStyle(fontWeight: FontWeight.bold))),
                                             Padding(padding: EdgeInsets.all(12), child: Text('Doctor', style: TextStyle(fontWeight: FontWeight.bold))),
                                             Padding(padding: EdgeInsets.all(12), child: Text('Diagnosis', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -474,7 +488,7 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
                                             children: [
                                               Padding(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-                                                child: Text(rec['visit_date'] ?? 'N/A'),
+                                                child: Text(DateFormatter.formatDate(rec['visit_date'])),
                                               ),
                                               Padding(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
