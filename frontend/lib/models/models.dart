@@ -6,10 +6,6 @@ class Role {
   final String? description;
   final String? permissions;
   final String? createdAt;
-  final String? updatedAt;
-  final String? lastSyncedAt;
-  final int? isDeleted;
-  final String? syncStatus;
 
   const Role({
     this.id,
@@ -17,10 +13,6 @@ class Role {
     this.description,
     this.permissions,
     this.createdAt,
-    this.updatedAt,
-    this.lastSyncedAt,
-    this.isDeleted,
-    this.syncStatus,
   });
 
   factory Role.fromMap(Map<String, dynamic> map) {
@@ -30,10 +22,6 @@ class Role {
       description: map['description'] as String?,
       permissions: map['permissions'] as String?,
       createdAt: map['created_at'] as String?,
-      updatedAt: map['updated_at'] as String?,
-      lastSyncedAt: map['last_synced_at'] as String?,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : null,
-      syncStatus: map['sync_status'] as String?,
     );
   }
 
@@ -44,10 +32,6 @@ class Role {
       'description': description,
       'permissions': permissions,
       'created_at': createdAt,
-      'updated_at': updatedAt,
-      'last_synced_at': lastSyncedAt,
-      'is_deleted': isDeleted,
-      'sync_status': syncStatus,
     };
   }
 
@@ -57,10 +41,6 @@ class Role {
     String? description,
     String? permissions,
     String? createdAt,
-    String? updatedAt,
-    String? lastSyncedAt,
-    int? isDeleted,
-    String? syncStatus,
   }) {
     return Role(
       id: id ?? this.id,
@@ -68,12 +48,9 @@ class Role {
       description: description ?? this.description,
       permissions: permissions ?? this.permissions,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      isDeleted: isDeleted ?? this.isDeleted,
-      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
+
 }
 
 class User {
@@ -89,10 +66,6 @@ class User {
   final String role;
   final int? isActive;
   final String? createdAt;
-  final String? updatedAt;
-  final String? lastSyncedAt;
-  final int? isDeleted;
-  final String? syncStatus;
 
   const User({
     this.id,
@@ -107,10 +80,6 @@ class User {
     required this.role,
     this.isActive,
     this.createdAt,
-    this.updatedAt,
-    this.lastSyncedAt,
-    this.isDeleted,
-    this.syncStatus,
   });
 
   factory User.fromMap(Map<String, dynamic> map) {
@@ -127,10 +96,6 @@ class User {
       role: map['role'] as String,
       isActive: map['is_active'] != null ? (map['is_active'] as num).toInt() : null,
       createdAt: map['created_at'] as String?,
-      updatedAt: map['updated_at'] as String?,
-      lastSyncedAt: map['last_synced_at'] as String?,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : null,
-      syncStatus: map['sync_status'] as String?,
     );
   }
 
@@ -148,10 +113,6 @@ class User {
       'role': role,
       'is_active': isActive,
       'created_at': createdAt,
-      'updated_at': updatedAt,
-      'last_synced_at': lastSyncedAt,
-      'is_deleted': isDeleted,
-      'sync_status': syncStatus,
     };
   }
 
@@ -168,10 +129,6 @@ class User {
     String? role,
     int? isActive,
     String? createdAt,
-    String? updatedAt,
-    String? lastSyncedAt,
-    int? isDeleted,
-    String? syncStatus,
   }) {
     return User(
       id: id ?? this.id,
@@ -186,12 +143,9 @@ class User {
       role: role ?? this.role,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      isDeleted: isDeleted ?? this.isDeleted,
-      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
+
 }
 
 class Patient {
@@ -211,8 +165,6 @@ class Patient {
   final String? registrationDate;
   final String? syncStatus;
   final String? updatedAt;
-  final String? lastSyncedAt;
-  final int? isDeleted;
 
   const Patient({
     this.id,
@@ -231,8 +183,6 @@ class Patient {
     this.registrationDate,
     this.syncStatus,
     this.updatedAt,
-    this.lastSyncedAt,
-    this.isDeleted,
   });
 
   factory Patient.fromMap(Map<String, dynamic> map) {
@@ -253,8 +203,6 @@ class Patient {
       registrationDate: map['registration_date'] as String?,
       syncStatus: map['sync_status'] as String?,
       updatedAt: map['updated_at'] as String?,
-      lastSyncedAt: map['last_synced_at'] as String?,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : null,
     );
   }
 
@@ -276,8 +224,6 @@ class Patient {
       'registration_date': registrationDate,
       'sync_status': syncStatus,
       'updated_at': updatedAt,
-      'last_synced_at': lastSyncedAt,
-      'is_deleted': isDeleted,
     };
   }
 
@@ -298,8 +244,6 @@ class Patient {
     String? registrationDate,
     String? syncStatus,
     String? updatedAt,
-    String? lastSyncedAt,
-    int? isDeleted,
   }) {
     return Patient(
       id: id ?? this.id,
@@ -318,10 +262,9 @@ class Patient {
       registrationDate: registrationDate ?? this.registrationDate,
       syncStatus: syncStatus ?? this.syncStatus,
       updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
+
 }
 
 class PatientVisit {
@@ -347,9 +290,6 @@ class PatientVisit {
   final String? followupDate;
   final String? syncStatus;
   final String? createdAt;
-  final String? updatedAt;
-  final String? lastSyncedAt;
-  final int? isDeleted;
 
   const PatientVisit({
     this.id,
@@ -374,9 +314,6 @@ class PatientVisit {
     this.followupDate,
     this.syncStatus,
     this.createdAt,
-    this.updatedAt,
-    this.lastSyncedAt,
-    this.isDeleted,
   });
 
   factory PatientVisit.fromMap(Map<String, dynamic> map) {
@@ -403,9 +340,6 @@ class PatientVisit {
       followupDate: map['followup_date'] as String?,
       syncStatus: map['sync_status'] as String?,
       createdAt: map['created_at'] as String?,
-      updatedAt: map['updated_at'] as String?,
-      lastSyncedAt: map['last_synced_at'] as String?,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : null,
     );
   }
 
@@ -433,9 +367,6 @@ class PatientVisit {
       'followup_date': followupDate,
       'sync_status': syncStatus,
       'created_at': createdAt,
-      'updated_at': updatedAt,
-      'last_synced_at': lastSyncedAt,
-      'is_deleted': isDeleted,
     };
   }
 
@@ -462,9 +393,6 @@ class PatientVisit {
     String? followupDate,
     String? syncStatus,
     String? createdAt,
-    String? updatedAt,
-    String? lastSyncedAt,
-    int? isDeleted,
   }) {
     return PatientVisit(
       id: id ?? this.id,
@@ -489,9 +417,16 @@ class PatientVisit {
       followupDate: followupDate ?? this.followupDate,
       syncStatus: syncStatus ?? this.syncStatus,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      isDeleted: isDeleted ?? this.isDeleted,
+    );
+  }
+
+  String formattedVitals({bool includePlaceholders = true}) {
+    return VitalsFormatter.formatAll(
+      bp: vitalsBp,
+      pulse: vitalsPulse,
+      temp: vitalsTemp,
+      saturation: vitalsSaturation,
+      includePlaceholders: includePlaceholders,
     );
   }
 }
@@ -511,9 +446,6 @@ class Bill {
   final String? paymentMethod;
   final String? billDate;
   final String? syncStatus;
-  final String? updatedAt;
-  final String? lastSyncedAt;
-  final int? isDeleted;
 
   const Bill({
     this.id,
@@ -530,9 +462,6 @@ class Bill {
     this.paymentMethod,
     this.billDate,
     this.syncStatus,
-    this.updatedAt,
-    this.lastSyncedAt,
-    this.isDeleted,
   });
 
   factory Bill.fromMap(Map<String, dynamic> map) {
@@ -551,9 +480,6 @@ class Bill {
       paymentMethod: map['payment_method'] as String?,
       billDate: map['bill_date'] as String?,
       syncStatus: map['sync_status'] as String?,
-      updatedAt: map['updated_at'] as String?,
-      lastSyncedAt: map['last_synced_at'] as String?,
-      isDeleted: map['is_deleted'] != null ? (map['is_deleted'] as num).toInt() : null,
     );
   }
 
@@ -573,9 +499,6 @@ class Bill {
       'payment_method': paymentMethod,
       'bill_date': billDate,
       'sync_status': syncStatus,
-      'updated_at': updatedAt,
-      'last_synced_at': lastSyncedAt,
-      'is_deleted': isDeleted,
     };
   }
 
@@ -594,9 +517,6 @@ class Bill {
     String? paymentMethod,
     String? billDate,
     String? syncStatus,
-    String? updatedAt,
-    String? lastSyncedAt,
-    int? isDeleted,
   }) {
     return Bill(
       id: id ?? this.id,
@@ -613,11 +533,9 @@ class Bill {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       billDate: billDate ?? this.billDate,
       syncStatus: syncStatus ?? this.syncStatus,
-      updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
+
 }
 
 class BillItem {
@@ -664,6 +582,7 @@ class BillItem {
       amount: amount ?? this.amount,
     );
   }
+
 }
 
 class AuditLog {
@@ -722,6 +641,7 @@ class AuditLog {
       syncStatus: syncStatus ?? this.syncStatus,
     );
   }
+
 }
 
 class SyncQueue {
@@ -791,5 +711,241 @@ class SyncQueue {
       errorMessage: errorMessage ?? this.errorMessage,
       createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+}
+
+class InvestigationReport {
+  final int? id;
+  final String reportUuid;
+  final int patientId;
+  final int? visitId;
+  final String title;
+  final String? category;
+  final String? reportDate;
+  final String filePath;
+  final String? fileUrl;
+  final String? fileName;
+  final String? fileType;
+  final int? fileSize;
+  final String? notes;
+  final int? uploadedBy;
+  final String? syncStatus;
+  final String? createdAt;
+
+  const InvestigationReport({
+    this.id,
+    required this.reportUuid,
+    required this.patientId,
+    this.visitId,
+    required this.title,
+    this.category,
+    this.reportDate,
+    required this.filePath,
+    this.fileUrl,
+    this.fileName,
+    this.fileType,
+    this.fileSize,
+    this.notes,
+    this.uploadedBy,
+    this.syncStatus,
+    this.createdAt,
+  });
+
+  factory InvestigationReport.fromMap(Map<String, dynamic> map) {
+    return InvestigationReport(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      reportUuid: map['report_uuid'] as String,
+      patientId: (map['patient_id'] as num).toInt(),
+      visitId: map['visit_id'] != null ? (map['visit_id'] as num).toInt() : null,
+      title: map['title'] as String,
+      category: map['category'] as String?,
+      reportDate: map['report_date'] as String?,
+      filePath: map['file_path'] as String,
+      fileUrl: map['file_url'] as String?,
+      fileName: map['file_name'] as String?,
+      fileType: map['file_type'] as String?,
+      fileSize: map['file_size'] != null ? (map['file_size'] as num).toInt() : null,
+      notes: map['notes'] as String?,
+      uploadedBy: map['uploaded_by'] != null ? (map['uploaded_by'] as num).toInt() : null,
+      syncStatus: map['sync_status'] as String?,
+      createdAt: map['created_at'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'report_uuid': reportUuid,
+      'patient_id': patientId,
+      'visit_id': visitId,
+      'title': title,
+      'category': category,
+      'report_date': reportDate,
+      'file_path': filePath,
+      'file_url': fileUrl,
+      'file_name': fileName,
+      'file_type': fileType,
+      'file_size': fileSize,
+      'notes': notes,
+      'uploaded_by': uploadedBy,
+      'sync_status': syncStatus,
+      'created_at': createdAt,
+    };
+  }
+
+  InvestigationReport copyWith({
+    int? id,
+    String? reportUuid,
+    int? patientId,
+    int? visitId,
+    String? title,
+    String? category,
+    String? reportDate,
+    String? filePath,
+    String? fileUrl,
+    String? fileName,
+    String? fileType,
+    int? fileSize,
+    String? notes,
+    int? uploadedBy,
+    String? syncStatus,
+    String? createdAt,
+  }) {
+    return InvestigationReport(
+      id: id ?? this.id,
+      reportUuid: reportUuid ?? this.reportUuid,
+      patientId: patientId ?? this.patientId,
+      visitId: visitId ?? this.visitId,
+      title: title ?? this.title,
+      category: category ?? this.category,
+      reportDate: reportDate ?? this.reportDate,
+      filePath: filePath ?? this.filePath,
+      fileUrl: fileUrl ?? this.fileUrl,
+      fileName: fileName ?? this.fileName,
+      fileType: fileType ?? this.fileType,
+      fileSize: fileSize ?? this.fileSize,
+      notes: notes ?? this.notes,
+      uploadedBy: uploadedBy ?? this.uploadedBy,
+      syncStatus: syncStatus ?? this.syncStatus,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+}
+
+class Setting {
+  final String? key;
+  final String? value;
+
+  const Setting({
+    this.key,
+    this.value,
+  });
+
+  factory Setting.fromMap(Map<String, dynamic> map) {
+    return Setting(
+      key: map['key'] as String?,
+      value: map['value'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'key': key,
+      'value': value,
+    };
+  }
+
+  Setting copyWith({
+    String? key,
+    String? value,
+  }) {
+    return Setting(
+      key: key ?? this.key,
+      value: value ?? this.value,
+    );
+  }
+
+}
+
+class VitalsFormatter {
+  static String formatBp(String? bp, {bool includePlaceholder = false}) {
+    if (bp == null || bp.trim().isEmpty) {
+      return includePlaceholder ? '___ mmHg' : '';
+    }
+    final cleaned = bp.trim();
+    if (cleaned.toLowerCase().contains('mmhg')) {
+      return cleaned;
+    }
+    return '$cleaned mmHg';
+  }
+
+  static String formatPulse(String? pulse, {bool includePlaceholder = false}) {
+    if (pulse == null || pulse.trim().isEmpty) {
+      return includePlaceholder ? '___ bpm' : '';
+    }
+    final cleaned = pulse.trim();
+    if (cleaned.toLowerCase().contains('bpm')) {
+      return cleaned;
+    }
+    return '$cleaned bpm';
+  }
+
+  static String formatTemp(String? temp, {bool includePlaceholder = false}) {
+    if (temp == null || temp.trim().isEmpty) {
+      return includePlaceholder ? '___ °C/°F' : '';
+    }
+    final cleaned = temp.trim();
+    if (cleaned.contains('°') || cleaned.toLowerCase().contains('c') || cleaned.toLowerCase().contains('f')) {
+      return cleaned;
+    }
+    final val = double.tryParse(cleaned);
+    if (val != null) {
+      if (val < 45) return '$cleaned °C';
+      return '$cleaned °F';
+    }
+    return '$cleaned °F';
+  }
+
+  static String formatSaturation(String? sat, {bool includePlaceholder = false}) {
+    if (sat == null || sat.trim().isEmpty) {
+      return includePlaceholder ? '___ %' : '';
+    }
+    final cleaned = sat.trim();
+    if (cleaned.contains('%')) {
+      return cleaned;
+    }
+    return '$cleaned%';
+  }
+
+  static String formatAll({
+    String? bp,
+    String? pulse,
+    String? temp,
+    String? saturation,
+    bool includePlaceholders = true,
+  }) {
+    final hasAny = (bp?.trim().isNotEmpty == true) ||
+        (pulse?.trim().isNotEmpty == true) ||
+        (temp?.trim().isNotEmpty == true) ||
+        (saturation?.trim().isNotEmpty == true);
+
+    if (!hasAny && !includePlaceholders) {
+      return 'None documented';
+    }
+
+    final formattedBp = formatBp(bp, includePlaceholder: includePlaceholders);
+    final formattedPulse = formatPulse(pulse, includePlaceholder: includePlaceholders);
+    final formattedTemp = formatTemp(temp, includePlaceholder: includePlaceholders);
+    final formattedSat = formatSaturation(saturation, includePlaceholder: includePlaceholders);
+
+    final parts = <String>[];
+    if (formattedBp.isNotEmpty) parts.add('BP: $formattedBp');
+    if (formattedPulse.isNotEmpty) parts.add('Pulse: $formattedPulse');
+    if (formattedTemp.isNotEmpty) parts.add('Temp: $formattedTemp');
+    if (formattedSat.isNotEmpty) parts.add('SPO2: $formattedSat');
+
+    return parts.join(' | ');
   }
 }

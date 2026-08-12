@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../widgets/common_widgets.dart';
 
 class ClinicalConsultationView extends StatefulWidget {
   final Patient patient;
@@ -19,6 +20,7 @@ class ClinicalConsultationView extends StatefulWidget {
 class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
+  String _tempUnit = '°F';
 
   String? _selectedIcdCode;
   String? _selectedIcdName;
@@ -179,7 +181,10 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
 
     final vitalsBp = _sanitizeInput(_vitalsBpController.text);
     final vitalsPulse = _sanitizeInput(_vitalsPulseController.text);
-    final vitalsTemp = _sanitizeInput(_vitalsTempController.text);
+    String? vitalsTemp = _sanitizeInput(_vitalsTempController.text);
+    if (vitalsTemp != null && !vitalsTemp.contains('°') && !vitalsTemp.toLowerCase().contains('c') && !vitalsTemp.toLowerCase().contains('f')) {
+      vitalsTemp = '$vitalsTemp $_tempUnit';
+    }
     final vitalsSat = _sanitizeInput(_vitalsSaturationController.text);
     final followup = _sanitizeInput(_followupDateController.text);
 
@@ -263,6 +268,40 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     }
   }
 
+  void _previewPrintConsultation() {
+    String? tempVal = _sanitizeInput(_vitalsTempController.text);
+    if (tempVal != null && !tempVal.contains('°') && !tempVal.toLowerCase().contains('c') && !tempVal.toLowerCase().contains('f')) {
+      tempVal = '$tempVal $_tempUnit';
+    }
+
+    final printContent = generateConsultationPrintText(
+      patientName: widget.patient.fullName,
+      patientCode: widget.patient.patientCode,
+      patientMobile: widget.patient.mobileNumber,
+      visitDate: DateTime.now().toString().split(' ')[0],
+      doctorName: widget.currentUser.fullName,
+      chiefComplaint: _sanitizeInput(_chiefComplaintController.text),
+      history: _sanitizeInput(_historyController.text),
+      vitalsBp: _sanitizeInput(_vitalsBpController.text),
+      vitalsPulse: _sanitizeInput(_vitalsPulseController.text),
+      vitalsTemp: tempVal,
+      vitalsSaturation: _sanitizeInput(_vitalsSaturationController.text),
+      diagnosis: _sanitizeInput(_diagnosisController.text),
+      diagnosisCode: _selectedIcdCode,
+      advice: _sanitizeInput(_adviceController.text),
+      followupDate: _sanitizeInput(_followupDateController.text),
+      isDraft: true,
+    );
+
+    ConsultationPrintPreviewDialog.show(
+      context,
+      dialog: ConsultationPrintPreviewDialog(
+        title: 'Consultation Draft Print Preview',
+        printContent: printContent,
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 8),
@@ -319,6 +358,17 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white70),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+            onPressed: _previewPrintConsultation,
+            icon: const Icon(Icons.print),
+            label: const Text('PREVIEW / PRINT DRAFT'),
+          ),
+          const SizedBox(width: 12),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
@@ -409,13 +459,34 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: TextFormField(
-                              controller: _vitalsTempController,
-                              validator: _validateTemp,
-                              decoration: const InputDecoration(
-                                labelText: 'Temp (e.g. 98.6 °F)',
-                                border: OutlineInputBorder(),
-                              ),
+                            flex: 2,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _vitalsTempController,
+                                    validator: _validateTemp,
+                                    decoration: InputDecoration(
+                                      labelText: 'Temp (e.g. 98.6 $_tempUnit)',
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                DropdownButton<String>(
+                                  value: _tempUnit,
+                                  underline: const SizedBox(),
+                                  items: const [
+                                    DropdownMenuItem(value: '°F', child: Text('°F')),
+                                    DropdownMenuItem(value: '°C', child: Text('°C')),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() => _tempUnit = val);
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 12),
