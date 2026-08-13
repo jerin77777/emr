@@ -305,7 +305,7 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(p.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                              Text('Code: ${p.patientCode}', style: const TextStyle(fontSize: 12)),
+                              Text('Patient ID: ${p.patientCode}', style: const TextStyle(fontSize: 12)),
                             ],
                           ),
                           Column(
