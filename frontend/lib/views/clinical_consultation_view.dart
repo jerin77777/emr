@@ -709,7 +709,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                                 title: Text(
                                   diag.icdCode == 'Custom'
                                       ? diag.diagnosisName
-                                      : '${diag.icdCode} – ${diag.diagnosisName}',
+                                      : '${diag.icdCode} - ${diag.diagnosisName}',
                                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
                                 ),
                                 trailing: IconButton(

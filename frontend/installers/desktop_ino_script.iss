@@ -4,9 +4,9 @@
 
 #define MyAppName "Anything EMR"
 #define MyAppVersion "1.5"
-#define MyAppPublisher "My Company, Inc."
-#define MyAppURL "https://www.example.com/"
-#define MyAppExeName "frontend.exe"
+#define MyAppPublisher "Anything Ventures"
+#define MyAppURL "https://www.anythingventures.in/"
+#define MyAppExeName "AnythingEmr.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -30,10 +30,12 @@ ArchitecturesAllowed=x64compatible
 ; the 64-bit view of the registry.
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
+DisableDirPage=no
+UsePreviousAppDir=no
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 ;PrivilegesRequired=lowest
 OutputBaseFilename=Anything Emr
-SetupIconFile=C:\Users\jerin\Music\emr\frontend\windows\runner\resources\app_icon.ico
+SetupIconFile=d:\Works\Clinic EHR System\emr\frontend\windows\runner\resources\app_icon.ico
 SolidCompression=yes
 WizardStyle=modern dynamic
 
@@ -44,11 +46,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\jerin\Music\emr\frontend\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\jerin\Music\emr\frontend\build\windows\x64\runner\Release\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\jerin\Music\emr\frontend\build\windows\x64\runner\Release\sqlite3.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\jerin\Music\emr\frontend\build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "C:\Users\jerin\Music\emr\frontend\installers\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "d:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "d:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "d:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "d:\Works\Clinic EHR System\emr\frontend\installers\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

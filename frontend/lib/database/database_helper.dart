@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -7,6 +10,31 @@ import '../models/models.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+
+  // Database change notifier to trigger UI updates
+  static final ValueNotifier<int> changeNotifier = ValueNotifier<int>(0);
+
+  static void notifyDatabaseChanged() {
+    changeNotifier.value++;
+  }
+
+  Future<int> getActivePatientsCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery("SELECT COUNT(*) as cnt FROM patients");
+    return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> getActivePatientVisitsCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery("SELECT COUNT(*) as cnt FROM patient_visits");
+    return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> getActiveBillsCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery("SELECT COUNT(*) as cnt FROM bills");
+    return (result.first['cnt'] as num?)?.toInt() ?? 0;
+  }
 
   DatabaseHelper._init();
 
@@ -31,6 +59,7 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('emr.db');
+    await _checkAndSeedIcd10(_database!);
     return _database!;
   }
 
@@ -698,8 +727,16 @@ class DatabaseHelper {
 
   // === Patient CRUD Operations ===
   Future<int> insertPatient(Patient patient) async {
+    if (patient.id == null) {
+      final count = await getActivePatientsCount();
+      if (count >= 10) {
+        throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 patients for this demo version.');
+      }
+    }
     final db = await instance.database;
-    return await db.insert('patients', patient.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final result = await db.insert('patients', patient.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDatabaseChanged();
+    return result;
   }
 
   Future<List<Patient>> getAllPatients() async {
@@ -725,11 +762,19 @@ class DatabaseHelper {
 
   Future<int> deletePatient(int id) async {
     final db = await instance.database;
-    return await db.delete('patients', where: 'id = ?', whereArgs: [id]);
+    final result = await db.delete('patients', where: 'id = ?', whereArgs: [id]);
+    notifyDatabaseChanged();
+    return result;
   }
 
   // === PatientVisit CRUD Operations ===
   Future<int> insertPatientVisit(PatientVisit patientVisit) async {
+    if (patientVisit.id == null) {
+      final count = await getActivePatientVisitsCount();
+      if (count >= 10) {
+        throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 consultation visits for this demo version.');
+      }
+    }
     final db = await instance.database;
     final id = await db.insert('patient_visits', patientVisit.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
     
@@ -743,6 +788,7 @@ class DatabaseHelper {
         });
       }
     }
+    notifyDatabaseChanged();
     return id;
   }
 
@@ -789,7 +835,9 @@ class DatabaseHelper {
 
   Future<int> deletePatientVisit(int id) async {
     final db = await instance.database;
-    return await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
+    final result = await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
+    notifyDatabaseChanged();
+    return result;
   }
 
   Future<List<ConsultationDiagnosis>> getDiagnosesForVisit(int visitId) async {
@@ -800,8 +848,18 @@ class DatabaseHelper {
 
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
+    if (bill.id == null) {
+      final count = await getActiveBillsCount();
+      if (count >= 10) {
+        throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 bills/invoices for this demo version.');
+      }
+    }
     final db = await instance.database;
-    return await db.insert('bills', bill.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final map = bill.toMap();
+    map['bill_date'] ??= DateTime.now().toIso8601String();
+    final result = await db.insert('bills', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    notifyDatabaseChanged();
+    return result;
   }
 
   Future<List<Bill>> getAllBills() async {
@@ -827,7 +885,9 @@ class DatabaseHelper {
 
   Future<int> deleteBill(int id) async {
     final db = await instance.database;
-    return await db.delete('bills', where: 'id = ?', whereArgs: [id]);
+    final result = await db.delete('bills', where: 'id = ?', whereArgs: [id]);
+    notifyDatabaseChanged();
+    return result;
   }
 
   // === BillItem CRUD Operations ===
@@ -1100,6 +1160,38 @@ class DatabaseHelper {
     ]);
   }
 
+  Future<void> _checkAndSeedIcd10(Database db) async {
+    try {
+      await db.execute('''CREATE TABLE IF NOT EXISTS "icd10_diagnoses" (
+        "code" TEXT PRIMARY KEY,
+        "name_en" TEXT NOT NULL,
+        "name_id" TEXT
+      );''');
+      await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_code" ON "icd10_diagnoses" ("code");');
+      await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_name" ON "icd10_diagnoses" ("name_en" COLLATE NOCASE);');
+
+      final countResult = await db.rawQuery('SELECT COUNT(*) as cnt FROM icd10_diagnoses');
+      final count = (countResult.first['cnt'] as num?)?.toInt() ?? 0;
+      if (count > 0) return;
+
+      final jsonString = await rootBundle.loadString('assets/master_icd_x.json');
+      final List<dynamic> list = json.decode(jsonString);
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        for (final item in list) {
+          batch.insert('icd10_diagnoses', {
+            'code': item['kode_icd'],
+            'name_en': item['nama_icd'],
+            'name_id': item['nama_icd_indo'],
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+        await batch.commit(noResult: true);
+      });
+    } catch (e) {
+      debugPrint('Error seeding ICD-10 data: $e');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> searchConsultations({
     String? query,
     String? startDate,
@@ -1169,7 +1261,7 @@ class DatabaseHelper {
         COALESCE(b.payment_status, 'Unbilled') as bill_status,
         b.id as bill_id,
         (
-          SELECT GROUP_CONCAT(cd.icd_code || ' – ' || cd.diagnosis_name, ', ')
+          SELECT GROUP_CONCAT(cd.icd_code || ' - ' || cd.diagnosis_name, ', ')
           FROM consultation_diagnoses cd
           WHERE cd.visit_id = v.id
         ) as diagnosis
@@ -1264,8 +1356,11 @@ class DatabaseHelper {
     await db.execute('DROP TABLE IF EXISTS "patients";');
     await db.execute('DROP TABLE IF EXISTS "users";');
     await db.execute('DROP TABLE IF EXISTS "roles";');
+    await db.execute('DROP TABLE IF EXISTS "icd10_diagnoses";');
     await _createDB(db, 1);
     await db.execute('PRAGMA foreign_keys = ON;');
+    await _checkAndSeedIcd10(db);
+    notifyDatabaseChanged();
   }
 
   // === Document CRUD Operations & File Helpers ===

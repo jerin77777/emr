@@ -724,13 +724,39 @@ class DashboardShellState extends State<DashboardShell> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          'Clinic EMR',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Clinic EMR',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
                               ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade700,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'DEMO VERSION',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -819,6 +845,12 @@ class DashboardShellState extends State<DashboardShell> {
                       );
                     },
                   ),
+                ),
+                // Sidebar Footer - Demo Limits Usage
+                const Divider(color: Colors.white12, height: 1),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                  child: DemoUsageSidebarPanel(),
                 ),
                 // Sidebar Footer - Logout Button
                 const Divider(color: Colors.white12, height: 1),
@@ -1537,5 +1569,135 @@ class StaffDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DashboardShell(currentUser: currentUser);
+  }
+}
+
+// ============================================================================
+// 6. DEMO USAGE SIDEBAR PANEL WIDGET
+// ============================================================================
+class DemoUsageSidebarPanel extends StatefulWidget {
+  const DemoUsageSidebarPanel({super.key});
+
+  @override
+  State<DemoUsageSidebarPanel> createState() => _DemoUsageSidebarPanelState();
+}
+
+class _DemoUsageSidebarPanelState extends State<DemoUsageSidebarPanel> {
+  int _patients = 0;
+  int _visits = 0;
+  int _bills = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCounts();
+    DatabaseHelper.changeNotifier.addListener(_loadCounts);
+  }
+
+  @override
+  void dispose() {
+    DatabaseHelper.changeNotifier.removeListener(_loadCounts);
+    super.dispose();
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      final pCount = await DatabaseHelper.instance.getActivePatientsCount();
+      final vCount = await DatabaseHelper.instance.getActivePatientVisitsCount();
+      final bCount = await DatabaseHelper.instance.getActiveBillsCount();
+      if (mounted) {
+        setState(() {
+          _patients = pCount;
+          _visits = vCount;
+          _bills = bCount;
+          _loading = false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8.0),
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final pPct = (_patients / 10).clamp(0.0, 1.0);
+    final vPct = (_visits / 10).clamp(0.0, 1.0);
+    final bPct = (_bills / 10).clamp(0.0, 1.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'DEMO RECORD LIMITS',
+          style: TextStyle(
+            color: Colors.tealAccent,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildUsageRow('Patients', _patients, 10, pPct),
+        const SizedBox(height: 8),
+        _buildUsageRow('Visits', _visits, 10, vPct),
+        const SizedBox(height: 8),
+        _buildUsageRow('Invoices', _bills, 10, bPct),
+      ],
+    );
+  }
+
+  Widget _buildUsageRow(String label, int current, int max, double pct) {
+    final isLimitReached = current >= max;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            Text(
+              '$current / $max',
+              style: TextStyle(
+                color: isLimitReached ? Colors.orangeAccent : Colors.white,
+                fontSize: 12,
+                fontWeight: isLimitReached ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: pct,
+            backgroundColor: Colors.white10,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isLimitReached ? Colors.orangeAccent : Colors.tealAccent,
+            ),
+            minHeight: 4,
+          ),
+        ),
+      ],
+    );
   }
 }
