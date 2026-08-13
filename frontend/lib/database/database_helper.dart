@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -31,6 +34,7 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('emr.db');
+    await _checkAndSeedIcd10(_database!);
     return _database!;
   }
 
@@ -801,7 +805,9 @@ class DatabaseHelper {
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
     final db = await instance.database;
-    return await db.insert('bills', bill.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final map = bill.toMap();
+    map['bill_date'] ??= DateTime.now().toIso8601String();
+    return await db.insert('bills', map, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Bill>> getAllBills() async {
@@ -1169,7 +1175,7 @@ class DatabaseHelper {
         COALESCE(b.payment_status, 'Unbilled') as bill_status,
         b.id as bill_id,
         (
-          SELECT GROUP_CONCAT(cd.icd_code || ' – ' || cd.diagnosis_name, ', ')
+          SELECT GROUP_CONCAT(cd.icd_code || ' - ' || cd.diagnosis_name, ', ')
           FROM consultation_diagnoses cd
           WHERE cd.visit_id = v.id
         ) as diagnosis
@@ -1250,6 +1256,38 @@ class DatabaseHelper {
     return (result.first['cnt'] as num?)?.toInt() ?? 0;
   }
 
+  Future<void> _checkAndSeedIcd10(Database db) async {
+    try {
+      await db.execute('''CREATE TABLE IF NOT EXISTS "icd10_diagnoses" (
+        "code" TEXT PRIMARY KEY,
+        "name_en" TEXT NOT NULL,
+        "name_id" TEXT
+      );''');
+      await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_code" ON "icd10_diagnoses" ("code");');
+      await db.execute('CREATE INDEX IF NOT EXISTS "idx_icd10_name" ON "icd10_diagnoses" ("name_en" COLLATE NOCASE);');
+
+      final countResult = await db.rawQuery('SELECT COUNT(*) as cnt FROM icd10_diagnoses');
+      final count = (countResult.first['cnt'] as num?)?.toInt() ?? 0;
+      if (count > 0) return;
+
+      final jsonString = await rootBundle.loadString('assets/master_icd_x.json');
+      final List<dynamic> list = json.decode(jsonString);
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        for (final item in list) {
+          batch.insert('icd10_diagnoses', {
+            'code': item['kode_icd'],
+            'name_en': item['nama_icd'],
+            'name_id': item['nama_icd_indo'],
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+        await batch.commit(noResult: true);
+      });
+    } catch (e) {
+      debugPrint('Error seeding ICD-10 data: $e');
+    }
+  }
+
   Future<void> resetAndSeedDatabase() async {
     final db = await instance.database;
     await db.execute('PRAGMA foreign_keys = OFF;');
@@ -1264,8 +1302,10 @@ class DatabaseHelper {
     await db.execute('DROP TABLE IF EXISTS "patients";');
     await db.execute('DROP TABLE IF EXISTS "users";');
     await db.execute('DROP TABLE IF EXISTS "roles";');
+    await db.execute('DROP TABLE IF EXISTS "icd10_diagnoses";');
     await _createDB(db, 1);
     await db.execute('PRAGMA foreign_keys = ON;');
+    await _checkAndSeedIcd10(db);
   }
 
   // === Document CRUD Operations & File Helpers ===

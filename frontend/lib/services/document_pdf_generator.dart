@@ -198,7 +198,7 @@ class DocumentPdfGenerator {
             _clinicalBlock(
               'Diagnosis',
               visit.diagnoses != null && visit.diagnoses!.isNotEmpty
-                  ? visit.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}').join('\n')
+                  ? visit.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n')
                   : (visit.diagnosis != null && visit.diagnosis!.isNotEmpty
                       ? '${visit.diagnosis!}${visit.diagnosisCode != null ? " (ICD-10: ${visit.diagnosisCode})" : ""}'
                       : null),
@@ -257,7 +257,7 @@ class DocumentPdfGenerator {
     final now = DateTime.now();
     final generatedAt = DateFormatter.formatDateTime(now.toString());
 
-    final billDateStr = DateFormatter.formatDate(bill.billDate);
+    final billDateStr = DateFormatter.formatDate(bill.billDate ?? DateTime.now().toIso8601String());
     final paymentStatus = bill.paymentStatus ?? 'Paid';
     final paymentMethod = bill.paymentMethod ?? 'Cash';
 

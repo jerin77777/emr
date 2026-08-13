@@ -454,7 +454,7 @@ class _VisitCardState extends State<VisitCard> {
                   if (v.diagnoses != null && v.diagnoses!.isNotEmpty)
                     ClinicalSectionItem(
                       title: 'Diagnosis',
-                      content: v.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}').join(', '),
+                      content: v.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join(', '),
                     )
                   else if (v.diagnosis != null && v.diagnosis!.isNotEmpty)
                     ClinicalSectionItem(
@@ -788,7 +788,7 @@ class BillingTab extends StatelessWidget {
                   ),
                 ),
                 title: Text('${bill.billNumber} | ₹${bill.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Date: ${bill.billDate ?? "N/A"} | Method: ${bill.paymentMethod ?? "Cash"}'),
+                subtitle: Text('Date: ${DateFormatter.formatDate(bill.billDate ?? DateTime.now().toIso8601String())} | Method: ${bill.paymentMethod ?? "Cash"}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

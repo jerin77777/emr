@@ -113,6 +113,7 @@ class _BillingViewState extends State<BillingView> {
         paidAmount: _paymentStatus == 'Paid' ? total : 0.0,
         paymentStatus: _paymentStatus,
         paymentMethod: _paymentMethod,
+        billDate: DateTime.now().toIso8601String(),
         syncStatus: 'pending',
       );
 
@@ -189,7 +190,7 @@ class _BillingViewState extends State<BillingView> {
                         child: ListTile(
                           leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.person, color: Colors.white)),
                           title: Text(widget.patient!.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('Code: ${widget.patient!.patientCode} | Mobile: ${widget.patient!.mobileNumber}'),
+                          subtitle: Text('Patient ID: ${widget.patient!.patientCode} | Mobile: ${widget.patient!.mobileNumber}'),
                         ),
                       )
                     else if (_isLoadingPatients)

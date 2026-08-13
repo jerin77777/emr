@@ -87,7 +87,7 @@ String generateConsultationPrintText({
   buffer.writeln('DIAGNOSIS:');
   if (diagnoses != null && diagnoses.isNotEmpty) {
     for (final d in diagnoses) {
-      buffer.writeln(d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}');
+      buffer.writeln(d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}');
     }
   } else {
     final diagStr = diagnosis != null && diagnosis.trim().isNotEmpty ? diagnosis : 'None documented';
@@ -197,6 +197,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
       id: record['id'] != null ? (record['id'] as num).toInt() : null,
       visitUuid: record['visit_uuid']?.toString() ?? '',
       patientId: record['patient_id'] != null ? (record['patient_id'] as num).toInt() : 0,
+      doctorId: record['doctor_id'] != null ? (record['doctor_id'] as num).toInt() : null,
       visitDate: record['visit_date']?.toString() ?? DateTime.now().toString().split('.')[0],
       chiefComplaint: record['chief_complaint']?.toString(),
       history: record['history']?.toString(),
@@ -218,6 +219,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
       patientName: patient.fullName,
       patientCode: patient.patientCode,
       visitDate: visit.visitDate,
+      doctorName: record['doctor_name']?.toString(),
       chiefComplaint: visit.chiefComplaint,
       history: visit.history,
       pastMedicalHistory: visit.pastMedicalHistory,
@@ -592,7 +594,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                 _previewClinicalBlock(
                   'Diagnosis',
                   finalDiagnoses.isNotEmpty
-                      ? finalDiagnoses.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} – ${d.diagnosisName}').join('\n')
+                      ? finalDiagnoses.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n')
                       : (widget.visit.diagnosis != null && widget.visit.diagnosis!.isNotEmpty
                           ? '${widget.visit.diagnosis!}${widget.visit.diagnosisCode != null ? " (ICD-10: ${widget.visit.diagnosisCode})" : ""}'
                           : null),

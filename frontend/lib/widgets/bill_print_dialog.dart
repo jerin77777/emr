@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/document_pdf_generator.dart';
+import '../utils/date_formatter.dart';
 
 /// Common Invoice / Bill Print Preview Dialog Widget
 class BillPrintPreviewDialog extends StatefulWidget {
@@ -152,7 +153,7 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
     buffer.writeln('             PATIENT INVOICE & RECEIPT              ');
     buffer.writeln('====================================================');
     buffer.writeln('Invoice No   : ${b.billNumber}');
-    buffer.writeln('Date         : ${b.billDate ?? DateTime.now().toString().split(' ')[0]}');
+    buffer.writeln('Date         : ${DateFormatter.formatDate(b.billDate ?? DateTime.now().toIso8601String())}');
     buffer.writeln('Payment Stat : ${b.paymentStatus ?? "Paid"}');
     buffer.writeln('Payment Meth : ${b.paymentMethod ?? "Cash"}');
     buffer.writeln('----------------------------------------------------');
@@ -274,7 +275,7 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Invoice #: ${b.billNumber}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Text('Date: ${b.billDate ?? "N/A"}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                            Text('Date: ${DateFormatter.formatDate(b.billDate ?? DateTime.now().toIso8601String())}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
                           ],
                         ),
                         Column(

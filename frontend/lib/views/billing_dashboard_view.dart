@@ -478,7 +478,7 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
                         children: [
                           Icon(Icons.numbers, size: 16, color: Colors.teal.shade700),
                           const SizedBox(width: 4),
-                          const Text('Code: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Patient ID: ', style: TextStyle(fontWeight: FontWeight.bold)),
                           Text(p.patientCode),
                         ],
                       ),
