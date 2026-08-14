@@ -229,6 +229,8 @@ class PatientHeaderCard extends StatelessWidget {
                       PatientInfoBadge(icon: Icons.medical_information, label: 'Referral', value: p.referralDoctor!),
                     if (p.emergencyContact != null && p.emergencyContact!.isNotEmpty)
                       PatientInfoBadge(icon: Icons.contact_phone, label: 'Emergency', value: p.emergencyContact!),
+                    if (p.proofOfIdentity != null && p.proofOfIdentity!.contains('|'))
+                      PatientInfoBadge(icon: Icons.fingerprint, label: p.identityType ?? 'Identity', value: p.identityNumber ?? ''),
                   ],
                 ),
               ],
@@ -1440,8 +1442,15 @@ try {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (_pickedFileSize != null)
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Supports PDF, JPG, JPEG, PNG formats.',
+                            style: TextStyle(fontSize: 11, color: Colors.black54),
+                          ),
+                          if (_pickedFileSize != null) ...[
+                            const SizedBox(height: 4),
                             Text('Size: ${(_pickedFileSize! / 1024).toStringAsFixed(1)} KB', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
                         ],
                       ),
                     ),
@@ -1454,10 +1463,10 @@ try {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.teal.shade700,
                             foregroundColor: Colors.white,
-                            minimumSize: const Size(150, 36),
+                            minimumSize: const Size(220, 36),
                           ),
                           icon: const Icon(Icons.folder_open, size: 16),
-                          label: Text(_pickedFileName == null ? 'Browse File' : 'Change File'),
+                          label: Text(_pickedFileName == null ? 'Upload Document / Scanned PDF' : 'Change File'),
                         ),
                         const SizedBox(height: 8),
                         ElevatedButton.icon(

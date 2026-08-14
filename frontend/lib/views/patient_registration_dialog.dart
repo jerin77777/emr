@@ -28,8 +28,10 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
   late TextEditingController _emailController;
   late TextEditingController _emergencyContactController;
   late TextEditingController _referralDoctorController;
+  late TextEditingController _identityNumberController;
 
   String _gender = 'Male';
+  String _identityType = 'Aadhaar';
   bool _isLoading = false;
   String _generatedPatientCode = '';
 
@@ -46,6 +48,16 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
     _emailController = TextEditingController(text: p?.email ?? '');
     _emergencyContactController = TextEditingController(text: p?.emergencyContact ?? '');
     _referralDoctorController = TextEditingController(text: p?.referralDoctor ?? '');
+    
+    // Parse proof of identity
+    if (p?.proofOfIdentity != null && p!.proofOfIdentity!.contains('|')) {
+      _identityType = p.identityType ?? 'Aadhaar';
+      _identityNumberController = TextEditingController(text: p.identityNumber ?? '');
+    } else {
+      _identityType = 'Aadhaar';
+      _identityNumberController = TextEditingController();
+    }
+    
     if (p?.gender != null) {
       _gender = p!.gender;
     }
@@ -90,6 +102,7 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
     _emailController.dispose();
     _emergencyContactController.dispose();
     _referralDoctorController.dispose();
+    _identityNumberController.dispose();
     super.dispose();
   }
 
@@ -146,6 +159,11 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
       final fullName = _sanitizeInput(_fullNameController.text);
       final dob = _sanitizeInput(_dobController.text);
       final mobile = _sanitizeInput(_mobileController.text);
+      final identityNum = _sanitizeInput(_identityNumberController.text);
+      String? proofOfIdentity;
+      if (identityNum != null) {
+        proofOfIdentity = '$_identityType|$identityNum';
+      }
 
       if (fullName == null || dob == null || mobile == null) {
         throw Exception('Required fields (Full Name, Date of Birth, Mobile Number) cannot be blank.');
@@ -165,6 +183,7 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
         email: _sanitizeInput(_emailController.text),
         emergencyContact: _sanitizeInput(_emergencyContactController.text),
         referralDoctor: _sanitizeInput(_referralDoctorController.text),
+        proofOfIdentity: proofOfIdentity,
         syncStatus: 'pending',
       );
 
@@ -380,6 +399,56 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
                                 prefixIcon: Icon(Icons.medical_information),
                                 border: OutlineInputBorder(),
                               ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _identityType,
+                              decoration: const InputDecoration(
+                                labelText: 'Identity Type',
+                                prefixIcon: Icon(Icons.perm_identity),
+                                border: OutlineInputBorder(),
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: 'Aadhaar', child: Text('Aadhaar')),
+                                DropdownMenuItem(value: 'Passport', child: Text('Passport')),
+                                DropdownMenuItem(value: 'Voter ID', child: Text('Voter ID')),
+                                DropdownMenuItem(value: 'Driving Licence', child: Text('Driving Licence')),
+                                DropdownMenuItem(value: 'Other', child: Text('Other')),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) setState(() => _identityType = v);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 2,
+                            child: TextFormField(
+                              controller: _identityNumberController,
+                              maxLength: 20,
+                              decoration: const InputDecoration(
+                                labelText: 'Identity Number',
+                                prefixIcon: Icon(Icons.numbers),
+                                border: OutlineInputBorder(),
+                                counterText: '',
+                              ),
+                              validator: (v) {
+                                if (v != null && v.trim().isNotEmpty) {
+                                  final val = v.trim();
+                                  final isAlphanumeric = RegExp(r'^[a-zA-Z0-9]+$').hasMatch(val);
+                                  if (!isAlphanumeric) {
+                                    return 'Must contain only alphanumeric characters';
+                                  }
+                                }
+                                return null;
+                              },
                             ),
                           ),
                         ],

@@ -38,6 +38,19 @@ class DatabaseHelper {
     return _database!;
   }
 
+  Future<void> closeDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
+
+  Future<void> reopenDatabase() async {
+    await closeDatabase();
+    _database = await _initDB('emr.db');
+    await _checkAndSeedIcd10(_database!);
+  }
+
   Future<Database> _initDB(String filePath) async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       sqfliteFfiInit();
@@ -85,6 +98,12 @@ class DatabaseHelper {
       if (!rolesCols.contains('created_at')) {
         await db.execute('ALTER TABLE "roles" ADD COLUMN "created_at" TEXT;');
       }
+      if (!rolesCols.contains('role_key')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "role_key" TEXT;');
+      }
+      if (!rolesCols.contains('is_system_role')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "is_system_role" INTEGER DEFAULT 0;');
+      }
       final usersInfo = await db.rawQuery("PRAGMA table_info('users')");
       final usersCols = usersInfo.map((c) => c['name'] as String).toSet();
       if (!usersCols.contains('user_uuid')) {
@@ -119,6 +138,104 @@ class DatabaseHelper {
       }
       if (!usersCols.contains('created_at')) {
         await db.execute('ALTER TABLE "users" ADD COLUMN "created_at" TEXT;');
+      }
+      if (!usersCols.contains('signature_file_path')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "signature_file_path" TEXT;');
+      }
+      if (!usersCols.contains('original_signature_file_path')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "original_signature_file_path" TEXT;');
+      }
+      if (!usersCols.contains('signature_version')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "signature_version" INTEGER DEFAULT 1;');
+      }
+      if (!usersCols.contains('signature_updated_at')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "signature_updated_at" TEXT;');
+      }
+
+      // Consolidate/Normalize existing doctor roles case-insensitively
+      final allDbRoles = await db.query('roles');
+      int? canonicalDoctorId;
+      final List<Map<String, dynamic>> doctorVariants = [];
+      
+      for (final roleRow in allDbRoles) {
+        final name = roleRow['role_name'] as String;
+        if (name.toLowerCase() == 'doctor') {
+          doctorVariants.add(roleRow);
+          if (name == 'Doctor') {
+            canonicalDoctorId = roleRow['id'] as int;
+          }
+        }
+      }
+      
+      if (canonicalDoctorId == null && doctorVariants.isNotEmpty) {
+        canonicalDoctorId = doctorVariants.first['id'] as int;
+      }
+      
+      if (doctorVariants.isEmpty) {
+        final id = await db.insert('roles', {
+          'role_name': 'Doctor',
+          'description': 'Doctor / Physician with clinical access',
+          'permissions': 'clinical,patients,prescriptions,billing,consultation.assign_doctor',
+          'role_key': 'doctor',
+          'is_system_role': 1,
+        });
+        canonicalDoctorId = id;
+      } else {
+        await db.update(
+          'roles',
+          {
+            'role_name': 'Doctor',
+            'role_key': 'doctor',
+            'is_system_role': 1,
+          },
+          where: 'id = ?',
+          whereArgs: [canonicalDoctorId],
+        );
+        
+        for (final variant in doctorVariants) {
+          final varName = variant['role_name'] as String;
+          await db.update(
+            'users',
+            {'role': 'Doctor'},
+            where: 'role = ?',
+            whereArgs: [varName],
+          );
+        }
+        
+        for (final variant in doctorVariants) {
+          final varName = variant['role_name'] as String;
+          if (varName != 'Doctor') {
+            await db.delete(
+              'roles',
+              where: 'role_name = ?',
+              whereArgs: [varName],
+            );
+          }
+        }
+      }
+      
+      // Ensure 'Admin' role exists with role_key='admin' and is_system_role=1
+      final adminRoles = await db.query('roles', where: 'LOWER(role_name) = ?', whereArgs: ['admin']);
+      if (adminRoles.isEmpty) {
+        await db.insert('roles', {
+          'role_name': 'Admin',
+          'description': 'System Administrator with full access',
+          'permissions': 'all',
+          'role_key': 'admin',
+          'is_system_role': 1,
+        });
+      } else {
+        final adminId = adminRoles.first['id'] as int;
+        await db.update(
+          'roles',
+          {
+            'role_name': 'Admin',
+            'role_key': 'admin',
+            'is_system_role': 1,
+          },
+          where: 'id = ?',
+          whereArgs: [adminId],
+        );
       }
       final patientsInfo = await db.rawQuery("PRAGMA table_info('patients')");
       final patientsCols = patientsInfo.map((c) => c['name'] as String).toSet();
@@ -158,8 +275,11 @@ class DatabaseHelper {
       if (!patientsCols.contains('referral_doctor')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "referral_doctor" TEXT;');
       }
-      if (!patientsCols.contains('registration_date')) {
+       if (!patientsCols.contains('registration_date')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "registration_date" TEXT;');
+      }
+      if (!patientsCols.contains('proof_of_identity')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "proof_of_identity" TEXT;');
       }
       if (!patientsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "sync_status" TEXT;');
@@ -231,6 +351,9 @@ class DatabaseHelper {
       }
       if (!patientVisitsCols.contains('created_at')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "created_at" TEXT;');
+      }
+      if (!patientVisitsCols.contains('doctor_signature_version')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "doctor_signature_version" INTEGER;');
       }
       final billsInfo = await db.rawQuery("PRAGMA table_info('bills')");
       final billsCols = billsInfo.map((c) => c['name'] as String).toSet();
@@ -437,6 +560,8 @@ class DatabaseHelper {
   "role_name" TEXT NOT NULL UNIQUE,
   "description" TEXT,
   "permissions" TEXT,
+  "role_key" TEXT,
+  "is_system_role" INTEGER DEFAULT 0,
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_roles_name" ON "roles" ("role_name");''');
@@ -452,6 +577,10 @@ class DatabaseHelper {
   "email" TEXT,
   "role" TEXT NOT NULL,
   "is_active" INTEGER NOT NULL DEFAULT 1,
+  "signature_file_path" TEXT,
+  "original_signature_file_path" TEXT,
+  "signature_version" INTEGER DEFAULT 1,
+  "signature_updated_at" TEXT,
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_users_username" ON "users" ("username");''');
@@ -471,6 +600,7 @@ class DatabaseHelper {
   "emergency_contact" TEXT,
   "referral_doctor" TEXT,
   "registration_date" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "proof_of_identity" TEXT,
   "sync_status" TEXT DEFAULT 'pending',
   "updated_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
@@ -500,6 +630,7 @@ class DatabaseHelper {
   "followup_date" TEXT,
   "sync_status" TEXT DEFAULT 'pending',
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "doctor_signature_version" INTEGER,
   FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
   FOREIGN KEY ("doctor_id") REFERENCES "users" ("id") ON DELETE SET NULL
 );''');
@@ -620,8 +751,8 @@ class DatabaseHelper {
   }
 
   Future<void> _seedInitialData(Database db) async {
-    await db.execute('''INSERT OR IGNORE INTO "roles" ("role_name", "description", "permissions") VALUES ('Admin', 'System Administrator with full access', 'all');''');
-    await db.execute('''INSERT OR IGNORE INTO "roles" ("role_name", "description", "permissions") VALUES ('Doctor', 'Doctor / Physician with clinical access', 'clinical,patients,prescriptions,billing');''');
+    await db.execute('''INSERT OR IGNORE INTO "roles" ("role_name", "description", "permissions", "role_key", "is_system_role") VALUES ('Admin', 'System Administrator with full access', 'all', 'admin', 1);''');
+    await db.execute('''INSERT OR IGNORE INTO "roles" ("role_name", "description", "permissions", "role_key", "is_system_role") VALUES ('Doctor', 'Doctor / Physician with clinical access', 'clinical,patients,prescriptions,billing,consultation.assign_doctor', 'doctor', 1);''');
     await db.execute('''INSERT OR IGNORE INTO "users" ("user_uuid", "username", "password_hash", "full_name", "specialization", "license_number", "phone", "email", "role", "is_active") VALUES ('usr-admin-default', 'admin', 'admin', 'System Administrator', 'Administration', 'ADMIN-001', '1234567890', 'admin@clinic.com', 'Admin', 1);''');
     await db.execute('''INSERT OR IGNORE INTO "users" ("user_uuid", "username", "password_hash", "full_name", "specialization", "license_number", "phone", "email", "role", "is_active") VALUES ('usr-doctor-default', 'doctor', 'doctor', 'Dr. John Doe', 'General Medicine', 'MED-1001', '0987654321', 'doctor@clinic.com', 'Doctor', 1);''');
   }
@@ -650,7 +781,7 @@ class DatabaseHelper {
 
   Future<Role?> getRoleByName(String roleName) async {
     final db = await instance.database;
-    final maps = await db.query('roles', where: 'role_name = ?', whereArgs: [roleName]);
+    final maps = await db.query('roles', where: 'LOWER(role_name) = ?', whereArgs: [roleName.toLowerCase()]);
     if (maps.isNotEmpty) {
       return Role.fromMap(maps.first);
     } else {
@@ -665,6 +796,10 @@ class DatabaseHelper {
 
   Future<int> deleteRole(int id) async {
     final db = await instance.database;
+    final role = await db.query('roles', where: 'id = ?', whereArgs: [id]);
+    if (role.isNotEmpty && role.first['is_system_role'] == 1) {
+      throw Exception('System protected roles cannot be deleted.');
+    }
     return await db.delete('roles', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -697,6 +832,13 @@ class DatabaseHelper {
 
   Future<int> deleteUser(int id) async {
     final db = await instance.database;
+    final user = await db.query('users', where: 'id = ?', whereArgs: [id]);
+    if (user.isNotEmpty) {
+      final visits = await db.query('patient_visits', where: 'doctor_id = ?', whereArgs: [id]);
+      if (visits.isNotEmpty) {
+        throw Exception('This doctor has historical clinical records and cannot be deleted. You can deactivate the doctor instead.');
+      }
+    }
     return await db.delete('users', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -1075,6 +1217,26 @@ class DatabaseHelper {
       return maps.first['value'] as String?;
     }
     return null;
+  }
+
+  Future<ClinicSettings> getClinicSettings() async {
+    final clinicName = await getSetting('clinic_name') ?? 'Neuron - The Clinic';
+    final telephone = await getSetting('clinic_phone') ?? '8105129750';
+    final website = await getSetting('clinic_website') ?? 'www.drsrajamani.in';
+    final address = await getSetting('clinic_address') ?? '';
+    final logo = await getSetting('clinic_logo');
+    final developerName = await getSetting('developer_name') ?? 'Anything Ventures';
+    final developerWebsite = await getSetting('developer_website') ?? 'www.anythingventures.in';
+    
+    return ClinicSettings(
+      clinicName: clinicName,
+      telephone: telephone,
+      website: website,
+      address: address,
+      logo: logo,
+      developerName: developerName,
+      developerWebsite: developerWebsite,
+    );
   }
 
   Future<List<Map<String, dynamic>>> searchIcd10Diagnoses(String query) async {

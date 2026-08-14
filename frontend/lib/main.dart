@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:file_picker/file_picker.dart';
 import 'database/database_helper.dart';
 import 'models/models.dart';
 import 'views/patient_management_view.dart';
@@ -8,23 +10,37 @@ import 'views/billing_dashboard_view.dart';
 import 'views/consultation_records_view.dart';
 import 'views/settings_backup_view.dart';
 import 'services/sync_service.dart';
+import 'services/backup_service.dart';
 import 'utils/crypto_helper.dart';
+import 'services/spell_check_service.dart';
+import 'services/signature_cleanup_service.dart';
+import 'views/welcome_restore_view.dart';
+import 'package:path/path.dart' show join;
 
 bool debug = true;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  
+  final appDirPath = await DatabaseHelper.getAppDirectoryPath();
+  final dbFile = File(join(appDirPath, 'emr.db'));
+  final bool dbExists = await dbFile.exists();
+
+  // Initialize offline spell check dictionary in background
+  SpellCheckService.instance.initialize();
+
   SyncService.instance.startSyncLoop();
-  runApp(const EMRApp());
+  runApp(EMRApp(isFirstLaunch: !dbExists));
 }
 
 class EMRApp extends StatelessWidget {
-  const EMRApp({super.key});
+  final bool isFirstLaunch;
+  const EMRApp({super.key, required this.isFirstLaunch});
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +56,7 @@ class EMRApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      home: isFirstLaunch ? const WelcomeRestoreScreen() : const LoginScreen(),
       builder: (context, child) {
         return child ?? const SizedBox.shrink();
       },
@@ -89,33 +105,172 @@ class _LoginScreenState extends State<LoginScreen> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('New Installation Detected'),
-          content: const Text(
-            'Do you want to restore your clinic data from the cloud?',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('No clinic data was found. How would you like to proceed?',
+                style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 20),
+
+              // Local Hard Drive option
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  _restoreFromLocalDrive();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.teal.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.teal.shade50,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.drive_file_move, color: Colors.teal.shade800, size: 26),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Restore from Hard Drive',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
+                            const Text('Browse and select a local backup folder.',
+                              style: TextStyle(fontSize: 11, color: Colors.black54)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Cloud option
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  _showRestoreCredentialsDialog();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.teal.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.teal.shade50,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_download, color: Colors.teal.shade800, size: 26),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Restore from Cloud',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
+                            const Text('Enter Firebase credentials to restore from cloud.',
+                              style: TextStyle(fontSize: 11, color: Colors.black54)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Start Fresh'),
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showRestoreCredentialsDialog();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal.shade700,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Yes, Restore'),
-            ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _restoreFromLocalDrive() async {
+    try {
+      final selectedPath = await FilePicker.getDirectoryPath();
+      if (selectedPath == null) return;
+
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+
+      final metadata = await BackupService.instance.validateBackup(selectedPath);
+
+      setState(() => _isLoading = false);
+
+      if (!mounted) return;
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Confirm Restore'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Restore this backup?', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Text('Clinic: ${metadata.clinicIdentifier}'),
+              Text('Patients: ${metadata.patientCount}'),
+              Text('Consultations: ${metadata.visitCount}'),
+              Text('Bills: ${metadata.billCount}'),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+              child: const Text('Restore'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true || !mounted) return;
+
+      setState(() => _isLoading = true);
+      await BackupService.instance.restoreLocalBackup(selectedPath);
+      setState(() => _isLoading = false);
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: const [
+            Icon(Icons.check_circle, color: Colors.green, size: 26),
+            SizedBox(width: 10),
+            Text('Restore Successful'),
+          ]),
+          content: const Text('Clinic data restored. You can now log in with your credentials.'),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Restore Failed: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   void _showRestoreCredentialsDialog() {
@@ -1047,6 +1202,20 @@ class _UserFormDialogState extends State<UserFormDialog> {
   List<Role> _availableRoles = [];
   bool _obscurePassword = true;
 
+  // Signature processing states
+  Uint8List? _origSigBytes;
+  Uint8List? _cleanSigBytes;
+  bool _isProcessingSig = false;
+  String? _sigError;
+
+  Uint8List? _approvedSigBytes;
+  Uint8List? _approvedOrigBytes;
+  bool? _approvedIsClean;
+
+  String? _existingSigPath;
+  String? _existingOrigSigPath;
+  int _existingSigVersion = 1;
+
   @override
   void initState() {
     super.initState();
@@ -1060,6 +1229,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
     _emailController = TextEditingController(text: u?.email ?? '');
     if (u != null) {
       _selectedRole = u.role;
+      _existingSigPath = u.signatureFilePath;
+      _existingOrigSigPath = u.originalSignatureFilePath;
+      _existingSigVersion = u.signatureVersion ?? 1;
     }
     _fetchRoles();
   }
@@ -1072,6 +1244,58 @@ class _UserFormDialogState extends State<UserFormDialog> {
         _selectedRole = roles.first.roleName;
       }
     });
+  }
+
+  Future<void> _pickAndProcessSignature() async {
+    setState(() {
+      _sigError = null;
+    });
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['png', 'jpg', 'jpeg'],
+      );
+
+      if (result == null || result.files.single.path == null) return;
+
+      final path = result.files.single.path!;
+      final file = File(path);
+      if (!await file.exists()) {
+        setState(() => _sigError = 'File does not exist on disk.');
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+      if (bytes.lengthInBytes > 10 * 1024 * 1024) {
+        setState(() => _sigError = 'File size exceeds maximum limit of 10MB.');
+        return;
+      }
+
+      setState(() {
+        _isProcessingSig = true;
+      });
+
+      // Process transparent cleanup locally using dynamic threshold isolate
+      final cleanResult = await SignatureCleanupService.cleanSignature(bytes);
+
+      setState(() {
+        _isProcessingSig = false;
+        _origSigBytes = bytes;
+        if (cleanResult.success) {
+          _cleanSigBytes = cleanResult.cleanedBytes;
+          _sigError = null;
+        } else {
+          _cleanSigBytes = null;
+          _sigError = cleanResult.errorMessage ?? 'Background removal failed.';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isProcessingSig = false;
+        _sigError = 'Error picking file: $e';
+      });
+    }
   }
 
   Future<void> _saveUser() async {
@@ -1089,11 +1313,51 @@ class _UserFormDialogState extends State<UserFormDialog> {
       passwordHashToSave = CryptoHelper.hashPassword(enteredPassword);
     }
 
+    final userUuid = widget.existingUser?.userUuid ?? 'usr-${DateTime.now().millisecondsSinceEpoch}';
+    
+    String? sigPath = _existingSigPath;
+    String? origSigPath = _existingOrigSigPath;
+    int sigVersion = _existingSigVersion;
+    String? sigUpdatedAt = widget.existingUser?.signatureUpdatedAt;
+
+    // Save uploaded signature files versioned in local directory
+    if (_approvedSigBytes != null) {
+      try {
+        final appDir = await DatabaseHelper.getAppDirectoryPath();
+        final sigDir = Directory(join(appDir, 'ClinicData', 'users', userUuid, 'signature'));
+        await sigDir.create(recursive: true);
+        
+        final origDir = Directory(join(sigDir.path, 'original'));
+        final procDir = Directory(join(sigDir.path, 'processed'));
+        await origDir.create(recursive: true);
+        await procDir.create(recursive: true);
+
+        final nextVersion = widget.existingUser != null ? _existingSigVersion + 1 : 1;
+        
+        final newOrigPath = join(origDir.path, 'signature_v$nextVersion.jpg');
+        final newProcPath = join(procDir.path, 'signature_v$nextVersion.png');
+        
+        await File(newOrigPath).writeAsBytes(_approvedOrigBytes!);
+        await File(newProcPath).writeAsBytes(_approvedSigBytes!);
+        
+        sigPath = newProcPath;
+        origSigPath = newOrigPath;
+        sigVersion = nextVersion;
+        sigUpdatedAt = DateTime.now().toIso8601String();
+      } catch (e) {
+        debugPrint('Error saving signature files: $e');
+      }
+    } else if (_approvedSigBytes == null && _existingSigPath == null) {
+      // If signature is removed, set to null
+      sigPath = null;
+      origSigPath = null;
+      sigVersion = 1;
+      sigUpdatedAt = null;
+    }
+
     final user = User(
       id: widget.existingUser?.id,
-      userUuid:
-          widget.existingUser?.userUuid ??
-          'usr-${DateTime.now().millisecondsSinceEpoch}',
+      userUuid: userUuid,
       username: _usernameController.text.trim(),
       passwordHash: passwordHashToSave,
       fullName: _fullNameController.text.trim(),
@@ -1111,6 +1375,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
           : _emailController.text.trim(),
       role: _selectedRole,
       isActive: 1,
+      signatureFilePath: sigPath,
+      originalSignatureFilePath: origSigPath,
+      signatureVersion: sigVersion,
+      signatureUpdatedAt: sigUpdatedAt,
     );
 
     if (widget.existingUser == null) {
@@ -1134,7 +1402,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
         child: Form(
           key: _formKey,
           child: SizedBox(
-            width: 400,
+            width: 420,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1206,6 +1474,287 @@ class _UserFormDialogState extends State<UserFormDialog> {
                   controller: _emailController,
                   decoration: const InputDecoration(labelText: 'Email Address'),
                 ),
+                if (_selectedRole.toLowerCase() == 'doctor') ...[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Doctor Signature *',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_isProcessingSig) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(strokeWidth: 2),
+                          SizedBox(width: 12),
+                          Text('Cleaning background offline...', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ] else if (_origSigBytes != null) ...[
+                    // Comparison view
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey.shade50,
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Compare Signature Cleanup',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('Original Upload', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey.shade300),
+                                        color: Colors.white,
+                                      ),
+                                      child: Image.memory(_origSigBytes!, fit: BoxFit.contain),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text('Cleaned (Transparent)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey.shade300),
+                                        color: Colors.teal.shade50,
+                                      ),
+                                      child: _cleanSigBytes != null
+                                          ? Image.memory(_cleanSigBytes!, fit: BoxFit.contain)
+                                          : const Center(
+                                              child: Text(
+                                                'Failed',
+                                                style: TextStyle(color: Colors.red, fontSize: 11),
+                                              ),
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_sigError != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _sigError!,
+                              style: const TextStyle(color: Colors.red, fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              if (_cleanSigBytes != null)
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.teal.shade700,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _approvedSigBytes = _cleanSigBytes;
+                                      _approvedOrigBytes = _origSigBytes;
+                                      _approvedIsClean = true;
+                                      _origSigBytes = null;
+                                      _cleanSigBytes = null;
+                                      _sigError = null;
+                                    });
+                                  },
+                                  child: const Text('Use Cleaned', style: TextStyle(fontSize: 12)),
+                                ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey.shade600,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _approvedSigBytes = _origSigBytes;
+                                    _approvedOrigBytes = _origSigBytes;
+                                    _approvedIsClean = false;
+                                    _origSigBytes = null;
+                                    _cleanSigBytes = null;
+                                    _sigError = null;
+                                  });
+                                },
+                                child: const Text('Use Original', style: TextStyle(fontSize: 12)),
+                              ),
+                              TextButton(
+                                onPressed: _pickAndProcessSignature,
+                                child: const Text('Try Again', style: TextStyle(fontSize: 12)),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _origSigBytes = null;
+                                    _cleanSigBytes = null;
+                                    _sigError = null;
+                                  });
+                                },
+                                child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else if (_approvedSigBytes != null) ...[
+                    Column(
+                      children: [
+                        Container(
+                          height: 80,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            color: Colors.teal.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.memory(_approvedSigBytes!, fit: BoxFit.contain),
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.shade700,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    _approvedIsClean == true ? 'Cleaned' : 'Original',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _pickAndProcessSignature,
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Replace', style: TextStyle(fontSize: 12)),
+                            ),
+                            const SizedBox(width: 12),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _approvedSigBytes = null;
+                                  _approvedOrigBytes = null;
+                                  _approvedIsClean = null;
+                                });
+                              },
+                              icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                              label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ] else if (_existingSigPath != null) ...[
+                    Column(
+                      children: [
+                        Container(
+                          height: 80,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: FutureBuilder<bool>(
+                            future: File(_existingSigPath!).exists(),
+                            builder: (context, snapshot) {
+                              if (snapshot.data == true) {
+                                return Image.file(File(_existingSigPath!), fit: BoxFit.contain);
+                              } else {
+                                return const Center(
+                                  child: Text('Signature file not found', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _pickAndProcessSignature,
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Replace', style: TextStyle(fontSize: 12)),
+                            ),
+                            const SizedBox(width: 12),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _existingSigPath = null;
+                                  _existingOrigSigPath = null;
+                                });
+                              },
+                              icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                              label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade200,
+                        foregroundColor: Colors.teal.shade800,
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: Colors.teal.shade200),
+                        ),
+                      ),
+                      onPressed: _pickAndProcessSignature,
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Upload Signature (PNG, JPG, JPEG)'),
+                    ),
+                    if (_sigError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _sigError!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ],
               ],
             ),
           ),
@@ -1339,12 +1888,30 @@ class _RoleManagementTabState extends State<RoleManagementTab> {
                     foregroundColor: Colors.white,
                     child: const Icon(Icons.security, size: 20),
                   ),
-                  title: Text(
-                    role.roleName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                  title: Row(
+                    children: [
+                      Text(
+                        role.roleName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      if (role.isSystem) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade800,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'System Role',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   subtitle: Text(
                     'Description: ${role.description ?? "N/A"}\nPermissions: ${role.permissions ?? "None"}',
@@ -1357,10 +1924,11 @@ class _RoleManagementTabState extends State<RoleManagementTab> {
                         icon: const Icon(Icons.edit, color: Colors.blue),
                         onPressed: () => _showRoleForm(role),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteRole(role),
-                      ),
+                      if (!role.isSystem)
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteRole(role),
+                        ),
                     ],
                   ),
                 ),
@@ -1396,7 +1964,8 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
     'Billing',
     'Reports',
     'Settings',
-    'User Management'
+    'User Management',
+    'Assign Doctor'
   ];
   List<String> _selectedPerms = [];
 
@@ -1416,9 +1985,10 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
           .map((p) => p.trim())
           .where((p) => p.isNotEmpty)
           .map((p) {
+            final mapped = p.toLowerCase() == 'consultation.assign_doctor' ? 'Assign Doctor' : p;
             return _allPermissionsList.firstWhere(
-              (item) => item.toLowerCase() == p.toLowerCase(),
-              orElse: () => p,
+              (item) => item.toLowerCase() == mapped.toLowerCase(),
+              orElse: () => mapped,
             );
           })
           .toList();
@@ -1428,7 +1998,10 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
   Future<void> _saveRole() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final String permissionsString = _selectedPerms.map((p) => p.toLowerCase()).join(',');
+    final String permissionsString = _selectedPerms.map((p) {
+      if (p == 'Assign Doctor') return 'consultation.assign_doctor';
+      return p.toLowerCase();
+    }).join(',');
 
     final role = Role(
       id: widget.existingRole?.id,
@@ -1437,6 +2010,8 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
           ? null
           : _descController.text.trim(),
       permissions: permissionsString.isEmpty ? 'none' : permissionsString,
+      roleKey: widget.existingRole?.roleKey,
+      isSystemRole: widget.existingRole?.isSystemRole ?? 0,
     );
 
     if (widget.existingRole == null) {
@@ -1452,6 +2027,7 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.existingRole != null;
+    final isSystem = widget.existingRole?.isSystem == true;
     return AlertDialog(
       title: Text(isEditing ? 'Edit Role' : 'Create Custom Role'),
       content: SingleChildScrollView(
@@ -1464,6 +2040,7 @@ class _RoleFormDialogState extends State<RoleFormDialog> {
               children: [
                 TextFormField(
                   controller: _nameController,
+                  enabled: !isSystem,
                   decoration: const InputDecoration(
                     labelText: 'Role Name (e.g. Nurse, Radiologist) *',
                   ),

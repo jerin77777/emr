@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/date_formatter.dart';
+import '../widgets/spell_check_widgets.dart';
 
 class ClinicalConsultationView extends StatefulWidget {
   final Patient patient;
@@ -27,10 +29,34 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   final FocusNode _diagnosisFocusNode = FocusNode();
   final List<ConsultationDiagnosis> _selectedDiagnoses = [];
 
+  List<PatientVisit> _previousVisits = [];
+  bool _hasPreviousVisits = false;
+
+  // Doctor assignment state variables
+  List<User> _activeDoctors = [];
+  User? _selectedDoctor;
+  bool _canAssignDoctor = false;
+  bool _isLoadingDoctors = true;
+
   @override
   void initState() {
     super.initState();
+    _loadPreviousVisits();
     _diagnosisController.addListener(_onDiagnosisChanged);
+    _initDoctorAssignment();
+  }
+
+  Future<void> _loadPreviousVisits() async {
+    try {
+      final visits = await DatabaseHelper.instance.getVisitsForPatient(widget.patient.id!);
+      if (visits.isNotEmpty) {
+        setState(() {
+          visits.sort((a, b) => (b.visitDate ?? '').compareTo(a.visitDate ?? ''));
+          _previousVisits = visits;
+          _hasPreviousVisits = true;
+        });
+      }
+    } catch (_) {}
   }
 
   void _onDiagnosisChanged() {
@@ -42,10 +68,103 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     }
   }
 
+  // Fetch active doctors and evaluate selection priorities
+  Future<void> _initDoctorAssignment() async {
+    setState(() => _isLoadingDoctors = true);
+    try {
+      final allUsers = await DatabaseHelper.instance.getAllUsers();
+      final List<User> doctors = [];
+      for (final u in allUsers) {
+        if (u.isActive == 0) continue;
+        final role = await DatabaseHelper.instance.getRoleByName(u.role);
+        if (role?.roleKey == 'doctor' || u.role.toLowerCase() == 'doctor') {
+          doctors.add(u);
+        }
+      }
+      
+      bool hasAssignPerm = false;
+      final currentRole = await DatabaseHelper.instance.getRoleByName(widget.currentUser.role);
+      if (widget.currentUser.role.toLowerCase() == 'admin' ||
+          currentRole?.roleKey == 'admin' ||
+          currentRole?.roleName.toLowerCase() == 'admin') {
+        hasAssignPerm = true;
+      } else if (currentRole != null) {
+        final permsStr = currentRole.permissions?.toLowerCase() ?? '';
+        if (permsStr == 'all' || permsStr == 'all_permissions') {
+          hasAssignPerm = true;
+        } else {
+          final perms = permsStr.split(',').map((p) => p.trim()).toList();
+          hasAssignPerm = perms.contains('consultation.assign_doctor') ||
+                          perms.contains('assign doctor') ||
+                          perms.contains('assign_doctor') ||
+                          perms.contains('consultation.assign doctor');
+        }
+      }
+
+      User? defaultDoc;
+      final currentRoleOfUser = await DatabaseHelper.instance.getRoleByName(widget.currentUser.role);
+      final isCurrentUserDoctor = currentRoleOfUser?.roleKey == 'doctor' || widget.currentUser.role.toLowerCase() == 'doctor';
+      
+      if (isCurrentUserDoctor) {
+        for (final d in doctors) {
+          if (d.userUuid == widget.currentUser.userUuid) {
+            defaultDoc = d;
+            break;
+          }
+        }
+        defaultDoc ??= widget.currentUser;
+      }
+
+      if (defaultDoc == null && widget.patient.id != null) {
+        final patientVisits = await DatabaseHelper.instance.getVisitsForPatient(widget.patient.id!);
+        if (patientVisits.isNotEmpty) {
+          patientVisits.sort((a, b) => (b.visitDate ?? '').compareTo(a.visitDate ?? ''));
+          final lastDocId = patientVisits.first.doctorId;
+          if (lastDocId != null) {
+            for (final d in doctors) {
+              if (d.id == lastDocId) {
+                defaultDoc = d;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (defaultDoc == null) {
+        final lastDocUuid = await DatabaseHelper.instance.getSetting('last_selected_doctor_${widget.currentUser.userUuid}');
+        if (lastDocUuid != null && lastDocUuid.isNotEmpty) {
+          for (final d in doctors) {
+            if (d.userUuid == lastDocUuid) {
+              defaultDoc = d;
+              break;
+            }
+          }
+        }
+      }
+
+      if (defaultDoc == null && doctors.isNotEmpty) {
+        defaultDoc = doctors.first;
+      }
+
+      setState(() {
+        _activeDoctors = doctors;
+        _selectedDoctor = defaultDoc;
+        _canAssignDoctor = hasAssignPerm;
+        _isLoadingDoctors = false;
+      });
+    } catch (e) {
+      debugPrint('Error initializing doctor assignment: $e');
+      setState(() {
+        _isLoadingDoctors = false;
+      });
+    }
+  }
+
   // Controllers for free text clinical headings
-  final _chiefComplaintController = TextEditingController();
-  final _historyController = TextEditingController();
-  final _pastHistoryController = TextEditingController();
+  final _chiefComplaintController = SpellCheckTextEditingController();
+  final _historyController = SpellCheckTextEditingController();
+  final _pastHistoryController = SpellCheckTextEditingController();
 
   // Vital signs (entry separated)
   final _vitalsBpController = TextEditingController();
@@ -53,11 +172,11 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   final _vitalsTempController = TextEditingController();
   final _vitalsSaturationController = TextEditingController();
 
-  final _systemicExamController = TextEditingController();
-  final _investigationsController = TextEditingController();
+  final _systemicExamController = SpellCheckTextEditingController();
+  final _investigationsController = SpellCheckTextEditingController();
   final _diagnosisController = TextEditingController();
-  final _adviceController = TextEditingController();
-  final _referralToController = TextEditingController();
+  final _adviceController = SpellCheckTextEditingController();
+  final _referralToController = SpellCheckTextEditingController();
   final _followupDateController = TextEditingController();
 
   @override
@@ -77,6 +196,84 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     _referralToController.dispose();
     _followupDateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _showCopyPreviousDialog() async {
+    if (_previousVisits.isEmpty) return;
+
+    final selected = await showDialog<PatientVisit>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Copy Previous Consultation'),
+          content: SizedBox(
+            width: 400,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _previousVisits.length,
+              itemBuilder: (context, index) {
+                final visit = _previousVisits[index];
+                final dateStr = visit.visitDate != null
+                    ? DateFormatter.formatDate(visit.visitDate!)
+                    : 'Unknown Date';
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListTile(
+                    title: Text('Visit #${visit.visitNumber ?? (index + 1)}'),
+                    subtitle: Text('Date: $dateStr\nDiagnosis: ${visit.diagnosis ?? "N/A"}'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () => Navigator.pop(context, visit),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (selected == null) return;
+
+    // Load diagnoses for the selected visit
+    List<ConsultationDiagnosis> copiedDiags = [];
+    try {
+      copiedDiags = await DatabaseHelper.instance.getDiagnosesForVisit(selected.id ?? 0);
+    } catch (_) {}
+
+    setState(() {
+      _chiefComplaintController.text = selected.chiefComplaint ?? '';
+      _historyController.text = selected.history ?? '';
+      _pastHistoryController.text = selected.pastMedicalHistory ?? '';
+      _systemicExamController.text = selected.systemicExamination ?? '';
+      _investigationsController.text = selected.investigations ?? '';
+      _adviceController.text = selected.advice ?? '';
+      _referralToController.text = selected.referralTo ?? '';
+
+      _selectedDiagnoses.clear();
+      for (final diag in copiedDiags) {
+        _selectedDiagnoses.add(
+          ConsultationDiagnosis(
+            icdCode: diag.icdCode,
+            diagnosisName: diag.diagnosisName,
+          ),
+        );
+      }
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Previous consultation details copied! You can now edit and save as a new visit.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   /// Sanitizes text input to prevent SQLite encoding issues or string truncations caused by NUL characters.
@@ -221,6 +418,16 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
 
     setState(() => _isSaving = true);
 
+    if (_selectedDoctor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a doctor before saving the consultation.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       if (widget.patient.id == null || widget.patient.id! <= 0) {
         throw Exception('Invalid patient identifier.');
@@ -233,7 +440,8 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       final visit = PatientVisit(
         visitUuid: visitUuid,
         patientId: widget.patient.id!,
-        doctorId: (widget.currentUser.id != null && widget.currentUser.id! > 0) ? widget.currentUser.id : null,
+        doctorId: _selectedDoctor?.id,
+        doctorSignatureVersion: _selectedDoctor?.signatureVersion,
         visitNumber: nextVisitNumber,
         chiefComplaint: chief,
         history: history,
@@ -253,6 +461,14 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         syncStatus: 'pending',
         diagnoses: diagnosesToSave,
       );
+
+      // Remember last selected doctor for current user
+      if (_selectedDoctor != null) {
+        await DatabaseHelper.instance.saveSetting(
+          'last_selected_doctor_${widget.currentUser.userUuid}',
+          _selectedDoctor!.userUuid,
+        );
+      }
 
       final insertedId = await DatabaseHelper.instance.insertPatientVisit(visit);
       if (insertedId <= 0) {
@@ -297,7 +513,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     final tempVisit = PatientVisit(
       visitUuid: 'vst-draft',
       patientId: widget.patient.id ?? 0,
-      doctorId: widget.currentUser.id,
+      doctorId: _selectedDoctor?.id,
       visitNumber: 0,
       chiefComplaint: _sanitizeInput(_chiefComplaintController.text),
       history: _sanitizeInput(_historyController.text),
@@ -322,7 +538,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       dialog: ConsultationPrintPreviewDialog.fromVisit(
         visit: tempVisit,
         patient: widget.patient,
-        currentUser: widget.currentUser,
+        currentUser: _selectedDoctor ?? widget.currentUser,
         title: 'Consultation Draft Print Preview',
         isDraft: true,
       ),
@@ -355,6 +571,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     int maxLines = 3,
     int maxLength = 2500,
     String? Function(String?)? validator,
+    String? fieldName,
   }) {
     return TextFormField(
       controller: controller,
@@ -370,6 +587,21 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         ),
         filled: true,
         fillColor: Colors.grey.shade50,
+        suffixIcon: (controller is SpellCheckTextEditingController && fieldName != null)
+            ? IconButton(
+                icon: const Icon(Icons.spellcheck, color: Colors.teal),
+                tooltip: 'Spell Check $fieldName',
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => SpellCheckDialog(
+                      controller: controller,
+                      fieldName: fieldName,
+                    ),
+                  );
+                },
+              )
+            : null,
       ),
       validator: validator ?? (v) => _validateFreeText(v, maxLength: maxLength),
     );
@@ -385,6 +617,19 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
+          if (_hasPreviousVisits) ...[
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white70),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              onPressed: _showCopyPreviousDialog,
+              icon: const Icon(Icons.copy_all),
+              label: const Text('COPY PREVIOUS'),
+            ),
+            const SizedBox(width: 12),
+          ],
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white,
@@ -435,11 +680,62 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
                       const Divider(height: 24),
 
+                      // Doctor Selector Input
+                      if (_isLoadingDoctors)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else ...[
+                        InkWell(
+                          onTap: _canAssignDoctor
+                              ? () async {
+                                  final User? chosen = await showDialog<User>(
+                                    context: context,
+                                    builder: (context) => _SearchableDoctorDialog(
+                                      doctors: _activeDoctors,
+                                      initialDoctor: _selectedDoctor,
+                                    ),
+                                  );
+                                  if (chosen != null) {
+                                    setState(() {
+                                      _selectedDoctor = chosen;
+                                    });
+                                  }
+                                }
+                              : null,
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              labelText: 'Consulting Doctor *',
+                              suffixIcon: Icon(
+                                _canAssignDoctor ? Icons.arrow_drop_down : Icons.lock_outline,
+                                color: Colors.teal.shade700,
+                              ),
+                              filled: !_canAssignDoctor,
+                              fillColor: !_canAssignDoctor ? Colors.grey.shade100 : null,
+                            ),
+                            child: Text(
+                              _selectedDoctor != null
+                                  ? '${_selectedDoctor!.fullName} (${_selectedDoctor!.specialization ?? "General Medicine"})'
+                                  : 'Select Doctor...',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: !_canAssignDoctor ? Colors.grey.shade700 : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
                       // a. Chief complaints
                       _buildSectionHeader('Chief Complaint', Icons.report_problem),
                       _buildFreeTextField(
                         controller: _chiefComplaintController,
                         hintText: 'Enter chief complaints...',
+                        fieldName: 'Chief Complaint',
                       ),
 
                       // b. History
@@ -448,6 +744,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         controller: _historyController,
                         hintText: 'Enter history of present illness / history...',
                         maxLines: 4,
+                        fieldName: 'History',
                       ),
 
                       // c. Past history/Medical History
@@ -456,6 +753,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         controller: _pastHistoryController,
                         hintText: 'Enter past medical history, chronic conditions, surgeries, allergies...',
                         maxLines: 4,
+                        fieldName: 'Past Medical History',
                       ),
 
                       // d. Vitals signs (BP, Pulse, Temp. Saturation) entry separated.
@@ -536,6 +834,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         controller: _systemicExamController,
                         hintText: 'Enter systemic examination findings...',
                         maxLines: 4,
+                        fieldName: 'Systemic Examination',
                       ),
 
                       // f. Investigations
@@ -544,6 +843,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         controller: _investigationsController,
                         hintText: 'Enter investigations / lab test details...',
                         maxLines: 3,
+                        fieldName: 'Investigations',
                       ),
 
                       // g. Diagnosis
@@ -732,6 +1032,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         controller: _adviceController,
                         hintText: 'Enter advice, prescriptions, dietary / lifestyle recommendations...',
                         maxLines: 4,
+                        fieldName: 'Advice',
                       ),
 
                       // i. Referral to…
@@ -740,6 +1041,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         controller: _referralToController,
                         hintText: 'Enter referral details...',
                         maxLines: 2,
+                        fieldName: 'Referral',
                       ),
 
                       const SizedBox(height: 16),
@@ -812,6 +1114,99 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SearchableDoctorDialog extends StatefulWidget {
+  final List<User> doctors;
+  final User? initialDoctor;
+
+  const _SearchableDoctorDialog({
+    required this.doctors,
+    this.initialDoctor,
+  });
+
+  @override
+  State<_SearchableDoctorDialog> createState() => _SearchableDoctorDialogState();
+}
+
+class _SearchableDoctorDialogState extends State<_SearchableDoctorDialog> {
+  late List<User> _filteredDoctors;
+  final _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredDoctors = widget.doctors;
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredDoctors = widget.doctors.where((doc) {
+        final name = doc.fullName.toLowerCase();
+        final spec = (doc.specialization ?? '').toLowerCase();
+        final license = (doc.licenseNumber ?? '').toLowerCase();
+        return name.contains(query) || spec.contains(query) || license.contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select Consulting Doctor'),
+      content: SizedBox(
+        width: 400,
+        height: 350,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                labelText: 'Search Doctor...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _filteredDoctors.isEmpty
+                  ? const Center(child: Text('No doctors match your search.'))
+                  : ListView.builder(
+                      itemCount: _filteredDoctors.length,
+                      itemBuilder: (context, index) {
+                        final doc = _filteredDoctors[index];
+                        final isSelected = widget.initialDoctor?.id == doc.id;
+                        return ListTile(
+                          selected: isSelected,
+                          selectedColor: Colors.teal.shade800,
+                          selectedTileColor: Colors.teal.shade50,
+                          title: Text(doc.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('${doc.specialization ?? "General Medicine"} | License: ${doc.licenseNumber ?? "N/A"}'),
+                          trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.teal) : null,
+                          onTap: () => Navigator.pop(context, doc),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

@@ -42,15 +42,78 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
   List<BillItem> _items = [];
   bool _isLoading = false;
   bool _isPrinting = false;
+  String _clinicName = 'Neuron - The Clinic';
+  String _clinicPhone = '8105129750';
+  String _clinicWebsite = 'www.drsrajamani.in';
+  String _developerName = 'Anything Ventures';
+  String _developerWebsite = 'www.anythingventures.in';
+  String? _doctorName;
+  String? _resolvedSigPath;
+  String? _doctorSpec;
+  String? _doctorLicense;
 
   @override
   void initState() {
     super.initState();
+    _loadClinicSettings();
     if (widget.items != null) {
       _items = widget.items!;
     } else if (widget.bill.id != null) {
       _fetchItems();
     }
+  }
+
+  Future<void> _loadClinicSettings() async {
+    try {
+      final settings = await DatabaseHelper.instance.getClinicSettings();
+      
+      String? docName;
+      String? sigPath;
+      String? spec;
+      String? license;
+      if (widget.bill.visitId != null) {
+        final visit = await DatabaseHelper.instance.getPatientVisitById(widget.bill.visitId!);
+        if (visit?.doctorId != null) {
+          final docUser = await DatabaseHelper.instance.getUserById(visit!.doctorId!);
+          docName = docUser?.fullName;
+          spec = docUser?.specialization;
+          license = docUser?.licenseNumber;
+          
+          if (docUser != null) {
+            if (visit.doctorSignatureVersion != null) {
+              final appDir = await DatabaseHelper.getAppDirectoryPath();
+              final versionedPath = path.join(
+                appDir,
+                'ClinicData',
+                'users',
+                docUser.userUuid,
+                'signature',
+                'processed',
+                'signature_v${visit.doctorSignatureVersion}.png',
+              );
+              if (File(versionedPath).existsSync()) {
+                sigPath = versionedPath;
+              }
+            }
+            sigPath ??= docUser.signatureFilePath;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _clinicName = settings.clinicName;
+          _clinicPhone = settings.telephone;
+          _clinicWebsite = settings.website;
+          _developerName = settings.developerName;
+          _developerWebsite = settings.developerWebsite;
+          _doctorName = docName;
+          _resolvedSigPath = sigPath;
+          _doctorSpec = spec;
+          _doctorLicense = license;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchItems() async {
@@ -149,7 +212,7 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
     final p = widget.patient;
     final buffer = StringBuffer();
     buffer.writeln('====================================================');
-    buffer.writeln('          ANYTHING EMR CLINIC & HEALTHCARE          ');
+    buffer.writeln('               ${_clinicName.toUpperCase()}         ');
     buffer.writeln('             PATIENT INVOICE & RECEIPT              ');
     buffer.writeln('====================================================');
     buffer.writeln('Invoice No   : ${b.billNumber}');
@@ -187,7 +250,7 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
     buffer.writeln('TOTAL AMOUNT PAYABLE               : ₹${b.totalAmount.toStringAsFixed(2)}');
     buffer.writeln('AMOUNT PAID                        : ₹${b.paidAmount?.toStringAsFixed(2) ?? b.totalAmount.toStringAsFixed(2)}');
     buffer.writeln('====================================================');
-    buffer.writeln('     Thank you for visiting Anything EMR Clinic!    ');
+    buffer.writeln(' Powered by $_developerName ($_developerWebsite) ');
     buffer.writeln('====================================================');
     return buffer.toString();
   }
@@ -259,8 +322,10 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
                     Center(
                       child: Column(
                         children: [
-                          Text('ANYTHING EMR CLINIC', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900, letterSpacing: 0.5)),
+                          Text(_clinicName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900, letterSpacing: 0.5)),
                           const SizedBox(height: 2),
+                          Text('Phone: $_clinicPhone | Website: $_clinicWebsite', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                          const SizedBox(height: 4),
                           const Text('INVOICE / RECEIPT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.black87)),
                           const SizedBox(height: 12),
                         ],
@@ -405,6 +470,58 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
                         const Text('TOTAL PAYABLE:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         Text('₹${b.totalAmount.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.teal.shade900)),
                       ],
+                    ),
+                    const Divider(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Receipt Generated via clinic billing portal', style: TextStyle(fontSize: 8, color: Colors.grey.shade600)),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (_resolvedSigPath != null && File(_resolvedSigPath!).existsSync()) ...[
+                              SizedBox(
+                                height: 40,
+                                width: 100,
+                                child: Image.file(File(_resolvedSigPath!), fit: BoxFit.contain),
+                              ),
+                              const SizedBox(height: 4),
+                            ] else ...[
+                              const SizedBox(height: 40),
+                            ],
+                            Container(
+                              width: 140,
+                              decoration: BoxDecoration(
+                                border: Border(bottom: BorderSide(color: Colors.grey.shade400, width: 0.8)),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            if (_doctorName != null) ...[
+                              Text(_doctorName!, style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
+                              Text(_doctorSpec ?? 'General Medicine', style: TextStyle(fontSize: 7, color: Colors.grey.shade700)),
+                              if (_doctorLicense != null)
+                                Text('License No: $_doctorLicense', style: TextStyle(fontSize: 7, color: Colors.grey.shade700)),
+                            ] else ...[
+                              Text('Authorized Signature', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    Center(
+                      child: Column(
+                        children: [
+                          Text('Powered by $_developerName', style: TextStyle(fontSize: 8, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                          Text(_developerWebsite, style: TextStyle(fontSize: 8, color: Colors.grey.shade400)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
