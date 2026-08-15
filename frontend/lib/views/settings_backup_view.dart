@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
+import '../services/backup_service.dart';
+import '../utils/date_formatter.dart';
 import '../main.dart';
 
 class SettingsBackupView extends StatefulWidget {
@@ -29,10 +32,14 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
   String _connectionTestStatus = '';
   bool _isTestingConnection = false;
 
+  String _lastLocalBackupTime = 'Never';
+  String _lastLocalBackupPath = '';
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _loadLocalBackupSettings();
     SyncService.instance.onStatusChanged = _updateStatus;
   }
 
@@ -64,6 +71,19 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
     });
   }
 
+  Future<void> _loadLocalBackupSettings() async {
+    final timeVal = await DatabaseHelper.instance.getSetting('last_local_backup_time');
+    final pathVal = await DatabaseHelper.instance.getSetting('last_local_backup_path');
+    setState(() {
+      if (timeVal != null) {
+        _lastLocalBackupTime = '${DateFormatter.formatDate(timeVal)} ${timeVal.split('T')[1].substring(0, 5)}';
+      } else {
+        _lastLocalBackupTime = 'Never';
+      }
+      _lastLocalBackupPath = pathVal ?? '';
+    });
+  }
+
   Future<void> _saveSettings() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -79,7 +99,6 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
         );
       }
       
-      // Trigger background sync immediately to verify new config
       SyncService.instance.triggerManualBackup();
     } catch (e) {
       if (mounted) {
@@ -91,6 +110,7 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
       setState(() => _isSavingSettings = false);
     }
   }
+
   Future<void> _testConnection() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -109,6 +129,229 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
       _connectionTestStatus = result;
     });
   }
+
+  // --- Local Backup Action ---
+  Future<void> _createLocalBackup() async {
+    try {
+      final selectedPath = await FilePicker.getDirectoryPath();
+      if (selectedPath == null) return;
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final finalPath = await BackupService.instance.createLocalBackup(selectedPath);
+      
+      final nowStr = DateTime.now().toIso8601String();
+      await DatabaseHelper.instance.saveSetting('last_local_backup_time', nowStr);
+      await DatabaseHelper.instance.saveSetting('last_local_backup_path', finalPath);
+
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        _loadLocalBackupSettings();
+        
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: const [
+                  Icon(Icons.check_circle, color: Colors.green, size: 28),
+                  SizedBox(width: 12),
+                  Text('Backup Completed'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Backup completed successfully!', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  Text('Time: ${DateFormatter.formatDate(nowStr)} ${DateTime.now().hour.toString().padLeft(2, "0")}:${DateTime.now().minute.toString().padLeft(2, "0")}'),
+                  const SizedBox(height: 6),
+                  Text('Location: $finalPath', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+                  child: const Text('Continue'),
+                )
+              ],
+            );
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.error, color: Colors.red, size: 28),
+                SizedBox(width: 12),
+                Text('Backup Failed'),
+              ],
+            ),
+            content: Text('Backup failed\nReason: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Dismiss'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  // --- Local Restore Action ---
+  Future<void> _restoreLocalBackup() async {
+    try {
+      final selectedPath = await FilePicker.getDirectoryPath();
+      if (selectedPath == null) return;
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final metadata = await BackupService.instance.validateBackup(selectedPath);
+      
+      if (mounted) {
+        Navigator.pop(context); // close loader
+      }
+
+      if (!mounted) return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Restore Backup'),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Are you sure you want to restore this backup? Current clinic data will be replaced.', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+                  Text('Clinic Name: ${metadata.clinicIdentifier}'),
+                  const SizedBox(height: 6),
+                  Text('Backup Date: ${DateFormatter.formatDate(metadata.backupTimestamp.split("T")[0])}'),
+                  const SizedBox(height: 6),
+                  Text('Patients: ${metadata.patientCount}'),
+                  const SizedBox(height: 6),
+                  Text('Consultations: ${metadata.visitCount}'),
+                  const SizedBox(height: 6),
+                  Text('Bills: ${metadata.billCount}'),
+                  const SizedBox(height: 6),
+                  Text('Documents: ${metadata.documentCount}'),
+                  const SizedBox(height: 6),
+                  Text('Application Version: ${metadata.applicationVersion}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 12),
+                  const Text('Note: A safety backup will be created automatically before restoration.', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.blue)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                child: const Text('Restore'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirm != true) return;
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      await BackupService.instance.restoreLocalBackup(selectedPath);
+
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.green, size: 28),
+                SizedBox(width: 12),
+                Text('Restore Successful'),
+              ],
+            ),
+            content: const Text('The clinic database and documents have been successfully restored. The application will now reload to activate the restored database.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    (route) => false,
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade700, foregroundColor: Colors.white),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.error, color: Colors.red, size: 28),
+                SizedBox(width: 12),
+                Text('Restore Failed'),
+              ],
+            ),
+            content: Text('Restoration failed\nReason: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Dismiss'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
   void _runCloudRestore() {
     final proj = _restoreProjectController.text.trim();
     final key = _restoreApiKeyController.text.trim();
@@ -128,7 +371,6 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             if (!_isRestoring) {
-              // Trigger actual restore
               _isRestoring = true;
               _restoreProgress = 0.0;
               _restoreStatusMessage = 'Initializing cloud restore connection...';
@@ -188,7 +430,6 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
         );
       },
     ).then((_) {
-      // Clean up local restore states
       setState(() {
         _isRestoring = false;
       });
@@ -215,7 +456,6 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                // Trigger a full app reload if needed, or clear credentials text
                 _restoreProjectController.clear();
                 _restoreApiKeyController.clear();
                 _restoreClinicController.clear();
@@ -319,6 +559,11 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
+                        'Before resetting the database, create a backup to protect your clinic data.',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.blue),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
                         'This action cannot be undone. To confirm, please type RESET in the box below:',
                         style: TextStyle(fontSize: 13),
                       ),
@@ -346,6 +591,13 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                   onPressed: () => Navigator.pop(context, false),
                   child: const Text('Cancel'),
                 ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context, false);
+                    _createLocalBackup();
+                  },
+                  child: const Text('Backup & Reset', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+                ),
                 ElevatedButton(
                   onPressed: isValid
                       ? () {
@@ -358,7 +610,7 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                     backgroundColor: Colors.red.shade700,
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Confirm & Reset'),
+                  child: const Text('Reset Anyway'),
                 ),
               ],
             );
@@ -373,7 +625,6 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    // Show loading spinner
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -488,7 +739,7 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                   icon: const Icon(Icons.backup),
-                                  label: const Text('Backup Now'),
+                                  label: const Text('Backup to Cloud Now'),
                                 ),
                             ],
                           ),
@@ -665,12 +916,88 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
             ),
             const SizedBox(width: 24),
 
-            // Right Column: Restore credentials
+            // Right Column: Local Backup & Cloud disaster restore
             Expanded(
               flex: 3,
               child: SingleChildScrollView(
                 child: Column(
                   children: [
+                    // NEW: Local Backup & Restore panel
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Local Backup & Restore',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.teal.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Secure your data locally to an internal drive, external hard disk, or USB key.',
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                            const Divider(height: 24),
+                            Text(
+                              'Last Local Backup:',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _lastLocalBackupTime,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            ),
+                            if (_lastLocalBackupPath.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                _lastLocalBackupPath,
+                                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: ElevatedButton.icon(
+                                onPressed: _createLocalBackup,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal.shade700,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.drive_file_move),
+                                label: const Text('Create Local Backup', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: _restoreLocalBackup,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.teal.shade900,
+                                  side: BorderSide(color: Colors.teal.shade300),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.settings_backup_restore),
+                                label: const Text('Restore from Local Backup', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
                     Card(
                       elevation: 1,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -740,6 +1067,54 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                       ),
                     ),
                     const SizedBox(height: 24),
+
+                    // NEW: Documentation Information card
+                    Card(
+                      color: Colors.teal.shade50,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.teal.shade100)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Backup & Restore Help',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.teal.shade900),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Cloud Backup',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const Text(
+                              'Automatically keeps your clinic data backed up when internet access is available.',
+                              style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Local Backup',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const Text(
+                              'Creates a complete backup that can be stored on a hard drive or USB drive.',
+                              style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Restore',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const Text(
+                              'Restoring replaces the current clinic data with the selected backup. A safety backup is created automatically before restoration.',
+                              style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
                     // Database Maintenance Card
                     Card(
                       elevation: 1,

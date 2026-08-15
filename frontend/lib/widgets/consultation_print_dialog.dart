@@ -109,7 +109,8 @@ String generateConsultationPrintText({
   buffer.writeln('FOLLOW-UP DATE:');
   buffer.writeln(followupDate != null && followupDate.trim().isNotEmpty ? DateFormatter.formatDate(followupDate) : 'None');
   buffer.writeln('------------------------------------------------------');
-  buffer.writeln('Generated via Clinic EMR - Cloud Synced Backup');
+  buffer.writeln('Powered by Anything Ventures');
+  buffer.writeln('www.anythingventures.in');
   buffer.writeln('======================================================');
 
   return buffer.toString();
@@ -261,13 +262,17 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
 
 class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPreviewDialog> {
   bool _isPrinting = false;
-  String _clinicName = 'Anything EMR Clinic';
-  String _clinicAddress = '123 Health Ave, Medical City';
-  String _clinicPhone = '+1-555-0199';
-  String _clinicEmail = 'contact@anythingemr.com';
-  String _clinicLicense = 'REG-2026-9923';
+  String _clinicName = 'Neuron - The Clinic';
+  String _clinicAddress = '';
+  String _clinicPhone = '8105129750';
+  String _clinicWebsite = 'www.drsrajamani.in';
+  String _developerName = 'Anything Ventures';
+  String _developerWebsite = 'www.anythingventures.in';
   List<ConsultationDiagnosis> _diagnoses = [];
   String? _doctorName;
+  String? _resolvedSigPath;
+  String? _doctorSpec;
+  String? _doctorLicense;
 
   @override
   void initState() {
@@ -277,29 +282,52 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
 
   Future<void> _loadClinicSettings() async {
     try {
-      final name = await DatabaseHelper.instance.getSetting('clinic_name');
-      final address = await DatabaseHelper.instance.getSetting('clinic_address');
-      final phone = await DatabaseHelper.instance.getSetting('clinic_phone');
-      final email = await DatabaseHelper.instance.getSetting('clinic_email');
-      final license = await DatabaseHelper.instance.getSetting('clinic_license');
-      
+      final settings = await DatabaseHelper.instance.getClinicSettings();
       final diags = await DatabaseHelper.instance.getDiagnosesForVisit(widget.visit.id ?? 0);
 
       String? docName;
+      String? sigPath;
+      String? spec;
+      String? license;
       if (widget.visit.doctorId != null) {
         final docUser = await DatabaseHelper.instance.getUserById(widget.visit.doctorId!);
         docName = docUser?.fullName;
+        spec = docUser?.specialization;
+        license = docUser?.licenseNumber;
+        
+        if (docUser != null) {
+          if (widget.visit.doctorSignatureVersion != null) {
+            final appDir = await DatabaseHelper.getAppDirectoryPath();
+            final versionedPath = path.join(
+              appDir,
+              'ClinicData',
+              'users',
+              docUser.userUuid,
+              'signature',
+              'processed',
+              'signature_v${widget.visit.doctorSignatureVersion}.png',
+            );
+            if (File(versionedPath).existsSync()) {
+              sigPath = versionedPath;
+            }
+          }
+          sigPath ??= docUser.signatureFilePath;
+        }
       }
 
       if (mounted) {
         setState(() {
-          if (name != null) _clinicName = name;
-          if (address != null) _clinicAddress = address;
-          if (phone != null) _clinicPhone = phone;
-          if (email != null) _clinicEmail = email;
-          if (license != null) _clinicLicense = license;
+          _clinicName = settings.clinicName;
+          _clinicAddress = settings.address;
+          _clinicPhone = settings.telephone;
+          _clinicWebsite = settings.website;
+          _developerName = settings.developerName;
+          _developerWebsite = settings.developerWebsite;
           _diagnoses = diags;
           _doctorName = docName;
+          _resolvedSigPath = sigPath;
+          _doctorSpec = spec;
+          _doctorLicense = license;
         });
       }
     } catch (_) {}
@@ -487,9 +515,11 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                         children: [
                           Text(_clinicName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
                           const SizedBox(height: 4),
-                          Text(_clinicAddress, style: TextStyle(fontSize: 11, color: Colors.grey.shade800)),
-                          Text('Phone: $_clinicPhone | Email: $_clinicEmail', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
-                          Text('Reg/License No: $_clinicLicense', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                          if (_clinicAddress.isNotEmpty) ...[
+                            Text(_clinicAddress, style: TextStyle(fontSize: 11, color: Colors.grey.shade800)),
+                            const SizedBox(height: 2),
+                          ],
+                          Text('Phone: $_clinicPhone | Website: $_clinicWebsite', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
                         ],
                       ),
                     ),
@@ -608,6 +638,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                 // 8. Sign-off Section
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,19 +649,43 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        if (_resolvedSigPath != null && File(_resolvedSigPath!).existsSync()) ...[
+                          SizedBox(
+                            height: 40,
+                            width: 100,
+                            child: Image.file(File(_resolvedSigPath!), fit: BoxFit.contain),
+                          ),
+                          const SizedBox(height: 4),
+                        ] else ...[
+                          const SizedBox(height: 40),
+                        ],
                         Container(
-                          width: 120,
+                          width: 140,
                           decoration: BoxDecoration(
                             border: Border(bottom: BorderSide(color: Colors.grey.shade400, width: 0.8)),
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text('Doctor\'s Authorized Signature', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
-                        if (_doctorName != null)
-                          Text(_doctorName!, style: TextStyle(fontSize: 8, color: Colors.grey.shade600)),
+                        if (_doctorName != null) ...[
+                          Text(_doctorName!, style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
+                          Text(_doctorSpec ?? 'General Medicine', style: TextStyle(fontSize: 7, color: Colors.grey.shade700)),
+                          if (_doctorLicense != null)
+                            Text('License No: $_doctorLicense', style: TextStyle(fontSize: 7, color: Colors.grey.shade700)),
+                        ] else ...[
+                          Text('Doctor\'s Authorized Signature', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                        ],
                       ],
                     ),
                   ],
+                ),
+                const Divider(height: 32),
+                Center(
+                  child: Column(
+                    children: [
+                      Text('Powered by $_developerName', style: TextStyle(fontSize: 8, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                      Text(_developerWebsite, style: TextStyle(fontSize: 8, color: Colors.grey.shade400)),
+                    ],
+                  ),
                 ),
               ],
             ),

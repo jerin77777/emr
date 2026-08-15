@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' show join;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../database/database_helper.dart';
@@ -8,17 +10,14 @@ import '../utils/date_formatter.dart';
 class DocumentPdfGenerator {
   /// Fetches clinic details from Settings. Fallbacks to default values if not defined.
   static Future<Map<String, String>> getClinicDetails() async {
-    final name = await DatabaseHelper.instance.getSetting('clinic_name') ?? 'Anything EMR Clinic';
-    final address = await DatabaseHelper.instance.getSetting('clinic_address') ?? '123 Health Ave, Medical City';
-    final phone = await DatabaseHelper.instance.getSetting('clinic_phone') ?? '+1-555-0199';
-    final email = await DatabaseHelper.instance.getSetting('clinic_email') ?? 'contact@anythingemr.com';
-    final license = await DatabaseHelper.instance.getSetting('clinic_license') ?? 'REG-2026-9923';
+    final settings = await DatabaseHelper.instance.getClinicSettings();
     return {
-      'name': name,
-      'address': address,
-      'phone': phone,
-      'email': email,
-      'license': license,
+      'name': settings.clinicName,
+      'address': settings.address,
+      'phone': settings.telephone,
+      'website': settings.website,
+      'developer_name': settings.developerName,
+      'developer_website': settings.developerWebsite,
     };
   }
 
@@ -31,6 +30,43 @@ class DocumentPdfGenerator {
     final pdf = pw.Document();
     final clinic = await getClinicDetails();
     final now = DateTime.now();
+
+    User? doctor;
+    if (visit.doctorId != null) {
+      doctor = await DatabaseHelper.instance.getUserById(visit.doctorId!);
+    }
+
+    String? resolvedSigPath;
+    if (doctor != null) {
+      if (visit.doctorSignatureVersion != null) {
+        final appDir = await DatabaseHelper.getAppDirectoryPath();
+        final versionedPath = join(
+          appDir,
+          'ClinicData',
+          'users',
+          doctor.userUuid,
+          'signature',
+          'processed',
+          'signature_v${visit.doctorSignatureVersion}.png',
+        );
+        if (File(versionedPath).existsSync()) {
+          resolvedSigPath = versionedPath;
+        }
+      }
+      resolvedSigPath ??= doctor.signatureFilePath;
+    }
+
+    pw.ImageProvider? sigImage;
+    if (resolvedSigPath != null && resolvedSigPath.isNotEmpty) {
+      try {
+        final sigFile = File(resolvedSigPath);
+        if (sigFile.existsSync()) {
+          sigImage = pw.MemoryImage(sigFile.readAsBytesSync());
+        }
+      } catch (e) {
+        // Log or handle error gracefully
+      }
+    }
     final generatedAt = DateFormatter.formatDateTime(now.toString());
 
     pdf.addPage(
@@ -65,8 +101,16 @@ class DocumentPdfGenerator {
             margin: const pw.EdgeInsets.only(top: 15),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Generated: $generatedAt | Powered by Anything EMR', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Generated: $generatedAt', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.SizedBox(height: 2),
+                    pw.Text('Powered by Anything Ventures (www.anythingventures.in)', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey500)),
+                  ],
+                ),
                 pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
               ],
             ),
@@ -84,9 +128,11 @@ class DocumentPdfGenerator {
                   children: [
                     pw.Text(clinic['name']!, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
                     pw.SizedBox(height: 4),
-                    pw.Text(clinic['address']!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
-                    pw.Text('Phone: ${clinic['phone']!} | Email: ${clinic['email']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-                    pw.Text('Reg/License No: ${clinic['license']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    if (clinic['address']!.isNotEmpty) ...[
+                      pw.Text(clinic['address']!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
+                      pw.SizedBox(height: 2),
+                    ],
+                    pw.Text('Phone: ${clinic['phone']!} | Website: ${clinic['website']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
                   ],
                 ),
                 // Reserved space for logo placeholder on the right
@@ -212,16 +258,27 @@ class DocumentPdfGenerator {
             // 8. Sign-off Section (Will automatically wrap cleanly)
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Generated by: Clinic ERP Portal', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    pw.Text('Generated by: Clinic ERP Portal', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
                   ],
                 ),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
+                    if (sigImage != null) ...[
+                      pw.Container(
+                        height: 50,
+                        width: 120,
+                        child: pw.Image(sigImage, fit: pw.BoxFit.contain),
+                      ),
+                      pw.SizedBox(height: 4),
+                    ] else ...[
+                      pw.SizedBox(height: 50),
+                    ],
                     pw.Container(
                       width: 150,
                       decoration: const pw.BoxDecoration(
@@ -230,9 +287,16 @@ class DocumentPdfGenerator {
                       padding: const pw.EdgeInsets.only(bottom: 4),
                     ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Doctor\'s Authorized Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
-                    if (doctorName != null)
-                      pw.Text(doctorName, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                    if (doctor != null) ...[
+                      pw.Text(doctor.fullName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                      pw.Text(doctor.specialization ?? 'General Medicine', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                      if (doctor.licenseNumber != null)
+                        pw.Text('License No: ${doctor.licenseNumber!}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                    ] else ...[
+                      pw.Text('Doctor\'s Authorized Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                      if (doctorName != null)
+                        pw.Text(doctorName, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                    ],
                   ],
                 ),
               ],
@@ -255,6 +319,45 @@ class DocumentPdfGenerator {
     final pdf = pw.Document();
     final clinic = await getClinicDetails();
     final now = DateTime.now();
+
+    User? doctor;
+    PatientVisit? visit;
+    if (bill.visitId != null) {
+      visit = await DatabaseHelper.instance.getPatientVisitById(bill.visitId!);
+      if (visit != null && visit.doctorId != null) {
+        doctor = await DatabaseHelper.instance.getUserById(visit.doctorId!);
+      }
+    }
+
+    String? resolvedSigPath;
+    if (doctor != null) {
+      if (visit != null && visit.doctorSignatureVersion != null) {
+        final appDir = await DatabaseHelper.getAppDirectoryPath();
+        final versionedPath = join(
+          appDir,
+          'ClinicData',
+          'users',
+          doctor.userUuid,
+          'signature',
+          'processed',
+          'signature_v${visit.doctorSignatureVersion}.png',
+        );
+        if (File(versionedPath).existsSync()) {
+          resolvedSigPath = versionedPath;
+        }
+      }
+      resolvedSigPath ??= doctor.signatureFilePath;
+    }
+
+    pw.ImageProvider? sigImage;
+    if (resolvedSigPath != null && resolvedSigPath.isNotEmpty) {
+      try {
+        final sigFile = File(resolvedSigPath);
+        if (sigFile.existsSync()) {
+          sigImage = pw.MemoryImage(sigFile.readAsBytesSync());
+        }
+      } catch (_) {}
+    }
     final generatedAt = DateFormatter.formatDateTime(now.toString());
 
     final billDateStr = DateFormatter.formatDate(bill.billDate ?? DateTime.now().toIso8601String());
@@ -303,8 +406,16 @@ class DocumentPdfGenerator {
             margin: const pw.EdgeInsets.only(top: 15),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
-                pw.Text('Generated: $generatedAt | Thank you for your visit!', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Generated: $generatedAt | Thank you for your visit!', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.SizedBox(height: 2),
+                    pw.Text('Powered by Anything Ventures (www.anythingventures.in)', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey500)),
+                  ],
+                ),
                 pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
               ],
             ),
@@ -322,8 +433,11 @@ class DocumentPdfGenerator {
                   children: [
                     pw.Text(clinic['name']!, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
                     pw.SizedBox(height: 4),
-                    pw.Text(clinic['address']!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
-                    pw.Text('Phone: ${clinic['phone']!} | Email: ${clinic['email']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    if (clinic['address']!.isNotEmpty) ...[
+                      pw.Text(clinic['address']!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
+                      pw.SizedBox(height: 2),
+                    ],
+                    pw.Text('Phone: ${clinic['phone']!} | Website: ${clinic['website']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
                   ],
                 ),
                 pw.Container(
@@ -441,6 +555,7 @@ class DocumentPdfGenerator {
             // 7. Signature area
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -451,6 +566,16 @@ class DocumentPdfGenerator {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
+                    if (sigImage != null) ...[
+                      pw.Container(
+                        height: 50,
+                        width: 120,
+                        child: pw.Image(sigImage, fit: pw.BoxFit.contain),
+                      ),
+                      pw.SizedBox(height: 4),
+                    ] else ...[
+                      pw.SizedBox(height: 50),
+                    ],
                     pw.Container(
                       width: 150,
                       decoration: const pw.BoxDecoration(
@@ -459,7 +584,14 @@ class DocumentPdfGenerator {
                       padding: const pw.EdgeInsets.only(bottom: 4),
                     ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Authorized Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                    if (doctor != null) ...[
+                      pw.Text(doctor.fullName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                      pw.Text(doctor.specialization ?? 'General Medicine', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                      if (doctor.licenseNumber != null)
+                        pw.Text('License No: ${doctor.licenseNumber!}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                    ] else ...[
+                      pw.Text('Authorized Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                    ],
                   ],
                 ),
               ],

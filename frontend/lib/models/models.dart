@@ -5,13 +5,19 @@ class Role {
   final String roleName;
   final String? description;
   final String? permissions;
+  final String? roleKey;
+  final int? isSystemRole;
   final String? createdAt;
+
+  bool get isSystem => isSystemRole == 1;
 
   const Role({
     this.id,
     required this.roleName,
     this.description,
     this.permissions,
+    this.roleKey,
+    this.isSystemRole = 0,
     this.createdAt,
   });
 
@@ -21,6 +27,8 @@ class Role {
       roleName: map['role_name'] as String,
       description: map['description'] as String?,
       permissions: map['permissions'] as String?,
+      roleKey: map['role_key'] as String?,
+      isSystemRole: map['is_system_role'] != null ? (map['is_system_role'] as num).toInt() : 0,
       createdAt: map['created_at'] as String?,
     );
   }
@@ -31,6 +39,8 @@ class Role {
       'role_name': roleName,
       'description': description,
       'permissions': permissions,
+      'role_key': roleKey,
+      'is_system_role': isSystemRole,
       'created_at': createdAt,
     };
   }
@@ -40,6 +50,8 @@ class Role {
     String? roleName,
     String? description,
     String? permissions,
+    String? roleKey,
+    int? isSystemRole,
     String? createdAt,
   }) {
     return Role(
@@ -47,6 +59,8 @@ class Role {
       roleName: roleName ?? this.roleName,
       description: description ?? this.description,
       permissions: permissions ?? this.permissions,
+      roleKey: roleKey ?? this.roleKey,
+      isSystemRole: isSystemRole ?? this.isSystemRole,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -65,6 +79,10 @@ class User {
   final String? email;
   final String role;
   final int? isActive;
+  final String? signatureFilePath;
+  final String? originalSignatureFilePath;
+  final int? signatureVersion;
+  final String? signatureUpdatedAt;
   final String? createdAt;
 
   const User({
@@ -79,6 +97,10 @@ class User {
     this.email,
     required this.role,
     this.isActive,
+    this.signatureFilePath,
+    this.originalSignatureFilePath,
+    this.signatureVersion = 1,
+    this.signatureUpdatedAt,
     this.createdAt,
   });
 
@@ -95,6 +117,10 @@ class User {
       email: map['email'] as String?,
       role: map['role'] as String,
       isActive: map['is_active'] != null ? (map['is_active'] as num).toInt() : null,
+      signatureFilePath: map['signature_file_path'] as String?,
+      originalSignatureFilePath: map['original_signature_file_path'] as String?,
+      signatureVersion: map['signature_version'] != null ? (map['signature_version'] as num).toInt() : 1,
+      signatureUpdatedAt: map['signature_updated_at'] as String?,
       createdAt: map['created_at'] as String?,
     );
   }
@@ -112,6 +138,10 @@ class User {
       'email': email,
       'role': role,
       'is_active': isActive,
+      'signature_file_path': signatureFilePath,
+      'original_signature_file_path': originalSignatureFilePath,
+      'signature_version': signatureVersion,
+      'signature_updated_at': signatureUpdatedAt,
       'created_at': createdAt,
     };
   }
@@ -128,6 +158,10 @@ class User {
     String? email,
     String? role,
     int? isActive,
+    String? signatureFilePath,
+    String? originalSignatureFilePath,
+    int? signatureVersion,
+    String? signatureUpdatedAt,
     String? createdAt,
   }) {
     return User(
@@ -142,6 +176,10 @@ class User {
       email: email ?? this.email,
       role: role ?? this.role,
       isActive: isActive ?? this.isActive,
+      signatureFilePath: signatureFilePath ?? this.signatureFilePath,
+      originalSignatureFilePath: originalSignatureFilePath ?? this.originalSignatureFilePath,
+      signatureVersion: signatureVersion ?? this.signatureVersion,
+      signatureUpdatedAt: signatureUpdatedAt ?? this.signatureUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -163,8 +201,21 @@ class Patient {
   final String? emergencyContact;
   final String? referralDoctor;
   final String? registrationDate;
+  final String? proofOfIdentity;
   final String? syncStatus;
   final String? updatedAt;
+
+  String? get identityType {
+    if (proofOfIdentity == null || !proofOfIdentity!.contains('|')) return null;
+    return proofOfIdentity!.split('|')[0];
+  }
+
+  String? get identityNumber {
+    if (proofOfIdentity == null || !proofOfIdentity!.contains('|')) return null;
+    final parts = proofOfIdentity!.split('|');
+    if (parts.length < 2) return null;
+    return parts[1];
+  }
 
   const Patient({
     this.id,
@@ -181,6 +232,7 @@ class Patient {
     this.emergencyContact,
     this.referralDoctor,
     this.registrationDate,
+    this.proofOfIdentity,
     this.syncStatus,
     this.updatedAt,
   });
@@ -201,6 +253,7 @@ class Patient {
       emergencyContact: map['emergency_contact'] as String?,
       referralDoctor: map['referral_doctor'] as String?,
       registrationDate: map['registration_date'] as String?,
+      proofOfIdentity: map['proof_of_identity'] as String?,
       syncStatus: map['sync_status'] as String?,
       updatedAt: map['updated_at'] as String?,
     );
@@ -222,6 +275,7 @@ class Patient {
       'emergency_contact': emergencyContact,
       'referral_doctor': referralDoctor,
       'registration_date': registrationDate,
+      'proof_of_identity': proofOfIdentity,
       'sync_status': syncStatus,
       'updated_at': updatedAt,
     };
@@ -242,6 +296,7 @@ class Patient {
     String? emergencyContact,
     String? referralDoctor,
     String? registrationDate,
+    String? proofOfIdentity,
     String? syncStatus,
     String? updatedAt,
   }) {
@@ -260,6 +315,7 @@ class Patient {
       emergencyContact: emergencyContact ?? this.emergencyContact,
       referralDoctor: referralDoctor ?? this.referralDoctor,
       registrationDate: registrationDate ?? this.registrationDate,
+      proofOfIdentity: proofOfIdentity ?? this.proofOfIdentity,
       syncStatus: syncStatus ?? this.syncStatus,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -272,6 +328,7 @@ class PatientVisit {
   final String visitUuid;
   final int patientId;
   final int? doctorId;
+  final int? doctorSignatureVersion;
   final String? visitDate;
   final int? visitNumber;
   final String? chiefComplaint;
@@ -297,6 +354,7 @@ class PatientVisit {
     required this.visitUuid,
     required this.patientId,
     this.doctorId,
+    this.doctorSignatureVersion,
     this.visitDate,
     this.visitNumber,
     this.chiefComplaint,
@@ -324,6 +382,7 @@ class PatientVisit {
       visitUuid: map['visit_uuid'] as String,
       patientId: (map['patient_id'] as num).toInt(),
       doctorId: map['doctor_id'] != null ? (map['doctor_id'] as num).toInt() : null,
+      doctorSignatureVersion: map['doctor_signature_version'] != null ? (map['doctor_signature_version'] as num).toInt() : null,
       visitDate: map['visit_date'] as String? ?? (map['created_at'] as String? ?? DateTime.now().toString()).split('.')[0],
       visitNumber: map['visit_number'] != null ? (map['visit_number'] as num).toInt() : null,
       chiefComplaint: map['chief_complaint'] as String?,
@@ -351,6 +410,7 @@ class PatientVisit {
       'visit_uuid': visitUuid,
       'patient_id': patientId,
       'doctor_id': doctorId,
+      'doctor_signature_version': doctorSignatureVersion,
       'visit_date': visitDate ?? DateTime.now().toString().split('.')[0],
       'visit_number': visitNumber,
       'chief_complaint': chiefComplaint,
@@ -377,6 +437,7 @@ class PatientVisit {
     String? visitUuid,
     int? patientId,
     int? doctorId,
+    int? doctorSignatureVersion,
     String? visitDate,
     int? visitNumber,
     String? chiefComplaint,
@@ -402,6 +463,7 @@ class PatientVisit {
       visitUuid: visitUuid ?? this.visitUuid,
       patientId: patientId ?? this.patientId,
       doctorId: doctorId ?? this.doctorId,
+      doctorSignatureVersion: doctorSignatureVersion ?? this.doctorSignatureVersion,
       visitDate: visitDate ?? this.visitDate,
       visitNumber: visitNumber ?? this.visitNumber,
       chiefComplaint: chiefComplaint ?? this.chiefComplaint,
@@ -768,6 +830,16 @@ class InvestigationReport {
   final int? uploadedBy;
   final String? syncStatus;
   final String? createdAt;
+  final String? fileHash;
+  final String? extractionStatus;
+  final int? extractionVersion;
+  final String? rawText;
+  final String? extractedAt;
+  final String? studyDate;
+  final String? modality;
+  final String? investigationType;
+  final String? findingsText;
+  final String? impressionText;
 
   const InvestigationReport({
     this.id,
@@ -786,6 +858,16 @@ class InvestigationReport {
     this.uploadedBy,
     this.syncStatus,
     this.createdAt,
+    this.fileHash,
+    this.extractionStatus,
+    this.extractionVersion,
+    this.rawText,
+    this.extractedAt,
+    this.studyDate,
+    this.modality,
+    this.investigationType,
+    this.findingsText,
+    this.impressionText,
   });
 
   factory InvestigationReport.fromMap(Map<String, dynamic> map) {
@@ -806,6 +888,16 @@ class InvestigationReport {
       uploadedBy: map['uploaded_by'] != null ? (map['uploaded_by'] as num).toInt() : null,
       syncStatus: map['sync_status'] as String?,
       createdAt: map['created_at'] as String?,
+      fileHash: map['file_hash'] as String?,
+      extractionStatus: map['extraction_status'] as String? ?? 'pending',
+      extractionVersion: map['extraction_version'] != null ? (map['extraction_version'] as num).toInt() : 1,
+      rawText: map['raw_text'] as String?,
+      extractedAt: map['extracted_at'] as String?,
+      studyDate: map['study_date'] as String?,
+      modality: map['modality'] as String?,
+      investigationType: map['investigation_type'] as String?,
+      findingsText: map['findings_text'] as String?,
+      impressionText: map['impression_text'] as String?,
     );
   }
 
@@ -827,6 +919,16 @@ class InvestigationReport {
       'uploaded_by': uploadedBy,
       'sync_status': syncStatus,
       'created_at': createdAt,
+      'file_hash': fileHash,
+      'extraction_status': extractionStatus,
+      'extraction_version': extractionVersion,
+      'raw_text': rawText,
+      'extracted_at': extractedAt,
+      'study_date': studyDate,
+      'modality': modality,
+      'investigation_type': investigationType,
+      'findings_text': findingsText,
+      'impression_text': impressionText,
     };
   }
 
@@ -847,6 +949,16 @@ class InvestigationReport {
     int? uploadedBy,
     String? syncStatus,
     String? createdAt,
+    String? fileHash,
+    String? extractionStatus,
+    int? extractionVersion,
+    String? rawText,
+    String? extractedAt,
+    String? studyDate,
+    String? modality,
+    String? investigationType,
+    String? findingsText,
+    String? impressionText,
   }) {
     return InvestigationReport(
       id: id ?? this.id,
@@ -865,9 +977,156 @@ class InvestigationReport {
       uploadedBy: uploadedBy ?? this.uploadedBy,
       syncStatus: syncStatus ?? this.syncStatus,
       createdAt: createdAt ?? this.createdAt,
+      fileHash: fileHash ?? this.fileHash,
+      extractionStatus: extractionStatus ?? this.extractionStatus,
+      extractionVersion: extractionVersion ?? this.extractionVersion,
+      rawText: rawText ?? this.rawText,
+      extractedAt: extractedAt ?? this.extractedAt,
+      studyDate: studyDate ?? this.studyDate,
+      modality: modality ?? this.modality,
+      investigationType: investigationType ?? this.investigationType,
+      findingsText: findingsText ?? this.findingsText,
+      impressionText: impressionText ?? this.impressionText,
+    );
+  }
+}
+
+class InvestigationMeasurement {
+  final int? id;
+  final int reportId;
+  final String reportUuid;
+  final String parameterName;
+  final double? valueNumeric;
+  final String valueText;
+  final String? unit;
+  final String? referenceRange;
+  final String? abnormalFlag;
+  final double confidence;
+  final bool verified;
+  final int pageNumber;
+
+  const InvestigationMeasurement({
+    this.id,
+    required this.reportId,
+    required this.reportUuid,
+    required this.parameterName,
+    this.valueNumeric,
+    required this.valueText,
+    this.unit,
+    this.referenceRange,
+    this.abnormalFlag,
+    this.confidence = 0.90,
+    this.verified = false,
+    this.pageNumber = 1,
+  });
+
+  factory InvestigationMeasurement.fromMap(Map<String, dynamic> map) {
+    return InvestigationMeasurement(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      reportId: (map['report_id'] as num).toInt(),
+      reportUuid: map['report_uuid'] as String? ?? '',
+      parameterName: map['parameter_name'] as String,
+      valueNumeric: map['value_numeric'] != null ? (map['value_numeric'] as num).toDouble() : null,
+      valueText: map['value_text'] as String,
+      unit: map['unit'] as String?,
+      referenceRange: map['reference_range'] as String?,
+      abnormalFlag: map['abnormal_flag'] as String?,
+      confidence: map['confidence'] != null ? (map['confidence'] as num).toDouble() : 0.90,
+      verified: map['verified'] == 1 || map['verified'] == true,
+      pageNumber: map['page_number'] != null ? (map['page_number'] as num).toInt() : 1,
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'report_id': reportId,
+      'report_uuid': reportUuid,
+      'parameter_name': parameterName,
+      'value_numeric': valueNumeric,
+      'value_text': valueText,
+      'unit': unit,
+      'reference_range': referenceRange,
+      'abnormal_flag': abnormalFlag,
+      'confidence': confidence,
+      'verified': verified ? 1 : 0,
+      'page_number': pageNumber,
+    };
+  }
+
+  InvestigationMeasurement copyWith({
+    int? id,
+    int? reportId,
+    String? reportUuid,
+    String? parameterName,
+    double? valueNumeric,
+    String? valueText,
+    String? unit,
+    String? referenceRange,
+    String? abnormalFlag,
+    double? confidence,
+    bool? verified,
+    int? pageNumber,
+  }) {
+    return InvestigationMeasurement(
+      id: id ?? this.id,
+      reportId: reportId ?? this.reportId,
+      reportUuid: reportUuid ?? this.reportUuid,
+      parameterName: parameterName ?? this.parameterName,
+      valueNumeric: valueNumeric ?? this.valueNumeric,
+      valueText: valueText ?? this.valueText,
+      unit: unit ?? this.unit,
+      referenceRange: referenceRange ?? this.referenceRange,
+      abnormalFlag: abnormalFlag ?? this.abnormalFlag,
+      confidence: confidence ?? this.confidence,
+      verified: verified ?? this.verified,
+      pageNumber: pageNumber ?? this.pageNumber,
+    );
+  }
+}
+
+class InvestigationDiagnosis {
+  final int? id;
+  final int reportId;
+  final String reportUuid;
+  final String diagnosisText;
+  final String? icd10Code;
+  final double confidence;
+  final bool verified;
+
+  const InvestigationDiagnosis({
+    this.id,
+    required this.reportId,
+    required this.reportUuid,
+    required this.diagnosisText,
+    this.icd10Code,
+    this.confidence = 0.90,
+    this.verified = false,
+  });
+
+  factory InvestigationDiagnosis.fromMap(Map<String, dynamic> map) {
+    return InvestigationDiagnosis(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      reportId: (map['report_id'] as num).toInt(),
+      reportUuid: map['report_uuid'] as String? ?? '',
+      diagnosisText: map['diagnosis_text'] as String,
+      icd10Code: map['icd10_code'] as String?,
+      confidence: map['confidence'] != null ? (map['confidence'] as num).toDouble() : 0.90,
+      verified: map['verified'] == 1 || map['verified'] == true,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'report_id': reportId,
+      'report_uuid': reportUuid,
+      'diagnosis_text': diagnosisText,
+      'icd10_code': icd10Code,
+      'confidence': confidence,
+      'verified': verified ? 1 : 0,
+    };
+  }
 }
 
 class Setting {
@@ -1066,4 +1325,24 @@ class Document {
       createdBy: createdBy ?? this.createdBy,
     );
   }
+}
+
+class ClinicSettings {
+  final String clinicName;
+  final String telephone;
+  final String website;
+  final String address;
+  final String? logo;
+  final String developerName;
+  final String developerWebsite;
+
+  const ClinicSettings({
+    required this.clinicName,
+    required this.telephone,
+    required this.website,
+    required this.address,
+    this.logo,
+    required this.developerName,
+    required this.developerWebsite,
+  });
 }
