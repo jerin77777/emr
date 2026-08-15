@@ -494,6 +494,66 @@ class DatabaseHelper {
       if (!investigationReportsCols.contains('created_at')) {
         await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "created_at" TEXT;');
       }
+      if (!investigationReportsCols.contains('file_hash')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "file_hash" TEXT;');
+      }
+      if (!investigationReportsCols.contains('extraction_status')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "extraction_status" TEXT DEFAULT \'pending\';');
+      }
+      if (!investigationReportsCols.contains('extraction_version')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "extraction_version" INTEGER DEFAULT 1;');
+      }
+      if (!investigationReportsCols.contains('raw_text')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "raw_text" TEXT;');
+      }
+      if (!investigationReportsCols.contains('extracted_at')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "extracted_at" TEXT;');
+      }
+      if (!investigationReportsCols.contains('study_date')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "study_date" TEXT;');
+      }
+      if (!investigationReportsCols.contains('modality')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "modality" TEXT;');
+      }
+      if (!investigationReportsCols.contains('investigation_type')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "investigation_type" TEXT;');
+      }
+      if (!investigationReportsCols.contains('findings_text')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "findings_text" TEXT;');
+      }
+      if (!investigationReportsCols.contains('impression_text')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "impression_text" TEXT;');
+      }
+
+      await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_measurements" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "report_id" INTEGER NOT NULL,
+  "report_uuid" TEXT NOT NULL,
+  "parameter_name" TEXT NOT NULL,
+  "value_numeric" REAL,
+  "value_text" TEXT NOT NULL,
+  "unit" TEXT,
+  "reference_range" TEXT,
+  "abnormal_flag" TEXT,
+  "confidence" REAL DEFAULT 0.90,
+  "verified" INTEGER DEFAULT 0,
+  "page_number" INTEGER DEFAULT 1,
+  FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
+);''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_report" ON "investigation_measurements" ("report_id");''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_param" ON "investigation_measurements" ("parameter_name");''');
+
+      await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_diagnoses" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "report_id" INTEGER NOT NULL,
+  "report_uuid" TEXT NOT NULL,
+  "diagnosis_text" TEXT NOT NULL,
+  "icd10_code" TEXT,
+  "confidence" REAL DEFAULT 0.90,
+  "verified" INTEGER DEFAULT 0,
+  FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
+);''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_diag_report" ON "investigation_diagnoses" ("report_id");''');
       final settingsInfo = await db.rawQuery("PRAGMA table_info('settings')");
       final settingsCols = settingsInfo.map((c) => c['name'] as String).toSet();
       if (!settingsCols.contains('value')) {
@@ -703,12 +763,53 @@ class DatabaseHelper {
   "uploaded_by" INTEGER,
   "sync_status" TEXT DEFAULT 'pending',
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "file_hash" TEXT,
+  "extraction_status" TEXT DEFAULT 'pending',
+  "extraction_version" INTEGER DEFAULT 1,
+  "raw_text" TEXT,
+  "extracted_at" TEXT,
+  "study_date" TEXT,
+  "modality" TEXT,
+  "investigation_type" TEXT,
+  "findings_text" TEXT,
+  "impression_text" TEXT,
   FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
   FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
   FOREIGN KEY ("uploaded_by") REFERENCES "users" ("id") ON DELETE SET NULL
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_reports_patient" ON "investigation_reports" ("patient_id");''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_inv_reports_uuid" ON "investigation_reports" ("report_uuid");''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_reports_hash" ON "investigation_reports" ("file_hash");''');
+
+    await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_measurements" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "report_id" INTEGER NOT NULL,
+  "report_uuid" TEXT NOT NULL,
+  "parameter_name" TEXT NOT NULL,
+  "value_numeric" REAL,
+  "value_text" TEXT NOT NULL,
+  "unit" TEXT,
+  "reference_range" TEXT,
+  "abnormal_flag" TEXT,
+  "confidence" REAL DEFAULT 0.90,
+  "verified" INTEGER DEFAULT 0,
+  "page_number" INTEGER DEFAULT 1,
+  FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
+);''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_report" ON "investigation_measurements" ("report_id");''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_param" ON "investigation_measurements" ("parameter_name");''');
+
+    await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_diagnoses" (
+  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+  "report_id" INTEGER NOT NULL,
+  "report_uuid" TEXT NOT NULL,
+  "diagnosis_text" TEXT NOT NULL,
+  "icd10_code" TEXT,
+  "confidence" REAL DEFAULT 0.90,
+  "verified" INTEGER DEFAULT 0,
+  FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
+);''');
+    await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_diag_report" ON "investigation_diagnoses" ("report_id");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "settings" (
   "key" TEXT PRIMARY KEY,
   "value" TEXT
@@ -1103,7 +1204,107 @@ class DatabaseHelper {
 
   Future<int> deleteInvestigationReport(int id) async {
     final db = await instance.database;
+    await db.delete('investigation_measurements', where: 'report_id = ?', whereArgs: [id]);
+    await db.delete('investigation_diagnoses', where: 'report_id = ?', whereArgs: [id]);
     return await db.delete('investigation_reports', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<InvestigationReport?> getInvestigationReportByHash(String hash) async {
+    final db = await instance.database;
+    final maps = await db.query('investigation_reports', where: 'file_hash = ?', whereArgs: [hash]);
+    if (maps.isNotEmpty) {
+      return InvestigationReport.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  // === Investigation Measurements & Diagnoses CRUD ===
+  Future<void> saveInvestigationExtraction({
+    required int reportId,
+    required String reportUuid,
+    required String status,
+    required String? rawText,
+    String? studyDate,
+    String? modality,
+    String? investigationType,
+    String? findingsText,
+    String? impressionText,
+    required List<InvestigationMeasurement> measurements,
+    List<InvestigationDiagnosis> diagnoses = const [],
+  }) async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      final updateData = <String, dynamic>{
+        'extraction_status': status,
+        'raw_text': rawText,
+        'extracted_at': DateTime.now().toIso8601String(),
+      };
+      if (studyDate != null) updateData['study_date'] = studyDate;
+      if (modality != null) updateData['modality'] = modality;
+      if (investigationType != null) updateData['investigation_type'] = investigationType;
+      if (findingsText != null) updateData['findings_text'] = findingsText;
+      if (impressionText != null) updateData['impression_text'] = impressionText;
+
+      await txn.update(
+        'investigation_reports',
+        updateData,
+        where: 'id = ?',
+        whereArgs: [reportId],
+      );
+
+      // Replace old measurements & diagnoses for this report
+      await txn.delete('investigation_measurements', where: 'report_id = ?', whereArgs: [reportId]);
+      for (final m in measurements) {
+        await txn.insert('investigation_measurements', {
+          'report_id': reportId,
+          'report_uuid': reportUuid,
+          'parameter_name': m.parameterName,
+          'value_numeric': m.valueNumeric,
+          'value_text': m.valueText,
+          'unit': m.unit,
+          'reference_range': m.referenceRange,
+          'abnormal_flag': m.abnormalFlag,
+          'confidence': m.confidence,
+          'verified': m.verified ? 1 : 0,
+          'page_number': m.pageNumber,
+        });
+      }
+
+      await txn.delete('investigation_diagnoses', where: 'report_id = ?', whereArgs: [reportId]);
+      for (final d in diagnoses) {
+        await txn.insert('investigation_diagnoses', {
+          'report_id': reportId,
+          'report_uuid': reportUuid,
+          'diagnosis_text': d.diagnosisText,
+          'icd10_code': d.icd10Code,
+          'confidence': d.confidence,
+          'verified': d.verified ? 1 : 0,
+        });
+      }
+    });
+  }
+
+  Future<List<InvestigationMeasurement>> getMeasurementsForReport(int reportId) async {
+    final db = await instance.database;
+    final maps = await db.query('investigation_measurements', where: 'report_id = ?', whereArgs: [reportId]);
+    return maps.map((m) => InvestigationMeasurement.fromMap(m)).toList();
+  }
+
+  Future<List<InvestigationMeasurement>> getMeasurementsForPatient(int patientId) async {
+    final db = await instance.database;
+    final maps = await db.rawQuery('''
+      SELECT m.* FROM investigation_measurements m
+      JOIN investigation_reports r ON m.report_id = r.id
+      WHERE r.patient_id = ?
+      ORDER BY r.id DESC, m.id ASC
+    ''', [patientId]);
+    return maps.map((m) => InvestigationMeasurement.fromMap(m)).toList();
+  }
+
+  Future<List<InvestigationDiagnosis>> getDiagnosesForReport(int reportId) async {
+    final db = await instance.database;
+    final maps = await db.query('investigation_diagnoses', where: 'report_id = ?', whereArgs: [reportId]);
+    return maps.map((d) => InvestigationDiagnosis.fromMap(d)).toList();
   }
 
   // === Setting CRUD Operations ===

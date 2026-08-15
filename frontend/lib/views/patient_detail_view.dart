@@ -11,6 +11,9 @@ import '../widgets/common_widgets.dart';
 import 'clinical_consultation_view.dart';
 import 'billing_view.dart';
 import '../main.dart';
+import '../widgets/investigation_review_dialog.dart';
+import '../services/document_text_extractor.dart';
+import '../services/investigation_parser_service.dart';
 
 /// Main Patient Detail View Widget
 class PatientDetailView extends StatefulWidget {
@@ -1125,34 +1128,101 @@ class InvestigationReportCard extends StatelessWidget {
               ],
             ),
             const Divider(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'Format: ${ext.toUpperCase()} | File: ${rep.fileName ?? "Document"}',
-                    style: TextStyle(fontSize: 12, color: Colors.teal.shade900, fontWeight: FontWeight.w500),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Row(
+            // Extraction Status & Measurements Preview
+            FutureBuilder<List<InvestigationMeasurement>>(
+              future: rep.id != null ? DatabaseHelper.instance.getMeasurementsForReport(rep.id!) : Future.value([]),
+              builder: (context, snapshot) {
+                final measurements = snapshot.data ?? [];
+                final isVerified = rep.extractionStatus == 'verified';
+                final needsReview = rep.extractionStatus == 'needs_review' || (measurements.isNotEmpty && !isVerified);
+                final statusLabel = isVerified ? 'VERIFIED' : (needsReview ? 'NEEDS REVIEW' : 'NOT PROCESSED');
+                final statusColor = isVerified ? Colors.green : (needsReview ? Colors.orange : Colors.grey);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.teal.shade800),
-                      onPressed: onView,
-                      icon: const Icon(Icons.visibility, size: 18),
-                      label: const Text('Preview / View'),
+                    Row(
+                      children: [
+                        Chip(
+                          avatar: Icon(isVerified ? Icons.verified : Icons.analytics, size: 14, color: statusColor.shade900),
+                          label: Text(statusLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor.shade900)),
+                          backgroundColor: statusColor.shade50,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 8),
+                        if (measurements.isNotEmpty)
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: measurements.take(4).map((m) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(right: 6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.teal.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.teal.shade200),
+                                    ),
+                                    child: Text(
+                                      '${m.parameterName}: ${m.valueText}',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      tooltip: 'Delete Document',
-                      onPressed: onDelete,
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Format: ${ext.toUpperCase()} | File: ${rep.fileName ?? "Document"}',
+                            style: TextStyle(fontSize: 12, color: Colors.teal.shade900, fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(foregroundColor: Colors.teal.shade800),
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => InvestigationReviewDialog(
+                                    report: rep,
+                                    onSaved: onView,
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.biotech, size: 18),
+                              label: Text(measurements.isNotEmpty ? 'Medical Data (${measurements.length})' : 'Extract Medical Data'),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(foregroundColor: Colors.teal.shade800),
+                              onPressed: onView,
+                              icon: const Icon(Icons.visibility, size: 18),
+                              label: const Text('Preview Original'),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              tooltip: 'Delete Document',
+                              onPressed: onDelete,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
             if (rep.notes != null && rep.notes!.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -1379,15 +1449,45 @@ try {
         createdAt: DateTime.now().toIso8601String(),
       );
 
-      await DatabaseHelper.instance.insertInvestigationReport(report);
+      final reportId = await DatabaseHelper.instance.insertInvestigationReport(report);
+      final savedReport = report.copyWith(id: reportId);
+
+      // 4. Trigger Automatic Extraction in Background
+      try {
+        final extractResult = await DocumentTextExtractor.instance.extractText(File(localPath));
+        final parsed = InvestigationParserService.instance.parseRawReportText(
+          rawText: extractResult.rawText,
+          reportId: reportId,
+          reportUuid: reportUuid,
+        );
+
+        await DatabaseHelper.instance.saveInvestigationExtraction(
+          reportId: reportId,
+          reportUuid: reportUuid,
+          status: 'needs_review',
+          rawText: extractResult.rawText,
+          studyDate: parsed.studyDate,
+          modality: parsed.modality,
+          investigationType: parsed.investigationType,
+          findingsText: parsed.findingsText,
+          impressionText: parsed.impressionText,
+          measurements: parsed.measurements,
+          diagnoses: parsed.diagnoses,
+        );
+      } catch (e) {
+        debugPrint('Automatic extraction error: $e');
+      }
 
       if (mounted) {
         navigator.pop();
         widget.onReportSaved();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Investigation report saved successfully! ${fileUrl != null ? "(Uploaded to Cloud Storage)" : "(Saved to Local Storage)"}'),
-            backgroundColor: Colors.green,
+
+        // Offer immediate medical data verification dialog
+        showDialog(
+          context: context,
+          builder: (context) => InvestigationReviewDialog(
+            report: savedReport,
+            onSaved: widget.onReportSaved,
           ),
         );
       }

@@ -830,6 +830,16 @@ class InvestigationReport {
   final int? uploadedBy;
   final String? syncStatus;
   final String? createdAt;
+  final String? fileHash;
+  final String? extractionStatus;
+  final int? extractionVersion;
+  final String? rawText;
+  final String? extractedAt;
+  final String? studyDate;
+  final String? modality;
+  final String? investigationType;
+  final String? findingsText;
+  final String? impressionText;
 
   const InvestigationReport({
     this.id,
@@ -848,6 +858,16 @@ class InvestigationReport {
     this.uploadedBy,
     this.syncStatus,
     this.createdAt,
+    this.fileHash,
+    this.extractionStatus,
+    this.extractionVersion,
+    this.rawText,
+    this.extractedAt,
+    this.studyDate,
+    this.modality,
+    this.investigationType,
+    this.findingsText,
+    this.impressionText,
   });
 
   factory InvestigationReport.fromMap(Map<String, dynamic> map) {
@@ -868,6 +888,16 @@ class InvestigationReport {
       uploadedBy: map['uploaded_by'] != null ? (map['uploaded_by'] as num).toInt() : null,
       syncStatus: map['sync_status'] as String?,
       createdAt: map['created_at'] as String?,
+      fileHash: map['file_hash'] as String?,
+      extractionStatus: map['extraction_status'] as String? ?? 'pending',
+      extractionVersion: map['extraction_version'] != null ? (map['extraction_version'] as num).toInt() : 1,
+      rawText: map['raw_text'] as String?,
+      extractedAt: map['extracted_at'] as String?,
+      studyDate: map['study_date'] as String?,
+      modality: map['modality'] as String?,
+      investigationType: map['investigation_type'] as String?,
+      findingsText: map['findings_text'] as String?,
+      impressionText: map['impression_text'] as String?,
     );
   }
 
@@ -889,6 +919,16 @@ class InvestigationReport {
       'uploaded_by': uploadedBy,
       'sync_status': syncStatus,
       'created_at': createdAt,
+      'file_hash': fileHash,
+      'extraction_status': extractionStatus,
+      'extraction_version': extractionVersion,
+      'raw_text': rawText,
+      'extracted_at': extractedAt,
+      'study_date': studyDate,
+      'modality': modality,
+      'investigation_type': investigationType,
+      'findings_text': findingsText,
+      'impression_text': impressionText,
     };
   }
 
@@ -909,6 +949,16 @@ class InvestigationReport {
     int? uploadedBy,
     String? syncStatus,
     String? createdAt,
+    String? fileHash,
+    String? extractionStatus,
+    int? extractionVersion,
+    String? rawText,
+    String? extractedAt,
+    String? studyDate,
+    String? modality,
+    String? investigationType,
+    String? findingsText,
+    String? impressionText,
   }) {
     return InvestigationReport(
       id: id ?? this.id,
@@ -927,9 +977,156 @@ class InvestigationReport {
       uploadedBy: uploadedBy ?? this.uploadedBy,
       syncStatus: syncStatus ?? this.syncStatus,
       createdAt: createdAt ?? this.createdAt,
+      fileHash: fileHash ?? this.fileHash,
+      extractionStatus: extractionStatus ?? this.extractionStatus,
+      extractionVersion: extractionVersion ?? this.extractionVersion,
+      rawText: rawText ?? this.rawText,
+      extractedAt: extractedAt ?? this.extractedAt,
+      studyDate: studyDate ?? this.studyDate,
+      modality: modality ?? this.modality,
+      investigationType: investigationType ?? this.investigationType,
+      findingsText: findingsText ?? this.findingsText,
+      impressionText: impressionText ?? this.impressionText,
+    );
+  }
+}
+
+class InvestigationMeasurement {
+  final int? id;
+  final int reportId;
+  final String reportUuid;
+  final String parameterName;
+  final double? valueNumeric;
+  final String valueText;
+  final String? unit;
+  final String? referenceRange;
+  final String? abnormalFlag;
+  final double confidence;
+  final bool verified;
+  final int pageNumber;
+
+  const InvestigationMeasurement({
+    this.id,
+    required this.reportId,
+    required this.reportUuid,
+    required this.parameterName,
+    this.valueNumeric,
+    required this.valueText,
+    this.unit,
+    this.referenceRange,
+    this.abnormalFlag,
+    this.confidence = 0.90,
+    this.verified = false,
+    this.pageNumber = 1,
+  });
+
+  factory InvestigationMeasurement.fromMap(Map<String, dynamic> map) {
+    return InvestigationMeasurement(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      reportId: (map['report_id'] as num).toInt(),
+      reportUuid: map['report_uuid'] as String? ?? '',
+      parameterName: map['parameter_name'] as String,
+      valueNumeric: map['value_numeric'] != null ? (map['value_numeric'] as num).toDouble() : null,
+      valueText: map['value_text'] as String,
+      unit: map['unit'] as String?,
+      referenceRange: map['reference_range'] as String?,
+      abnormalFlag: map['abnormal_flag'] as String?,
+      confidence: map['confidence'] != null ? (map['confidence'] as num).toDouble() : 0.90,
+      verified: map['verified'] == 1 || map['verified'] == true,
+      pageNumber: map['page_number'] != null ? (map['page_number'] as num).toInt() : 1,
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'report_id': reportId,
+      'report_uuid': reportUuid,
+      'parameter_name': parameterName,
+      'value_numeric': valueNumeric,
+      'value_text': valueText,
+      'unit': unit,
+      'reference_range': referenceRange,
+      'abnormal_flag': abnormalFlag,
+      'confidence': confidence,
+      'verified': verified ? 1 : 0,
+      'page_number': pageNumber,
+    };
+  }
+
+  InvestigationMeasurement copyWith({
+    int? id,
+    int? reportId,
+    String? reportUuid,
+    String? parameterName,
+    double? valueNumeric,
+    String? valueText,
+    String? unit,
+    String? referenceRange,
+    String? abnormalFlag,
+    double? confidence,
+    bool? verified,
+    int? pageNumber,
+  }) {
+    return InvestigationMeasurement(
+      id: id ?? this.id,
+      reportId: reportId ?? this.reportId,
+      reportUuid: reportUuid ?? this.reportUuid,
+      parameterName: parameterName ?? this.parameterName,
+      valueNumeric: valueNumeric ?? this.valueNumeric,
+      valueText: valueText ?? this.valueText,
+      unit: unit ?? this.unit,
+      referenceRange: referenceRange ?? this.referenceRange,
+      abnormalFlag: abnormalFlag ?? this.abnormalFlag,
+      confidence: confidence ?? this.confidence,
+      verified: verified ?? this.verified,
+      pageNumber: pageNumber ?? this.pageNumber,
+    );
+  }
+}
+
+class InvestigationDiagnosis {
+  final int? id;
+  final int reportId;
+  final String reportUuid;
+  final String diagnosisText;
+  final String? icd10Code;
+  final double confidence;
+  final bool verified;
+
+  const InvestigationDiagnosis({
+    this.id,
+    required this.reportId,
+    required this.reportUuid,
+    required this.diagnosisText,
+    this.icd10Code,
+    this.confidence = 0.90,
+    this.verified = false,
+  });
+
+  factory InvestigationDiagnosis.fromMap(Map<String, dynamic> map) {
+    return InvestigationDiagnosis(
+      id: map['id'] != null ? (map['id'] as num).toInt() : null,
+      reportId: (map['report_id'] as num).toInt(),
+      reportUuid: map['report_uuid'] as String? ?? '',
+      diagnosisText: map['diagnosis_text'] as String,
+      icd10Code: map['icd10_code'] as String?,
+      confidence: map['confidence'] != null ? (map['confidence'] as num).toDouble() : 0.90,
+      verified: map['verified'] == 1 || map['verified'] == true,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'report_id': reportId,
+      'report_uuid': reportUuid,
+      'diagnosis_text': diagnosisText,
+      'icd10_code': icd10Code,
+      'confidence': confidence,
+      'verified': verified ? 1 : 0,
+    };
+  }
 }
 
 class Setting {

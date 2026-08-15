@@ -102,6 +102,12 @@ class SyncService {
       // 6. Sync Investigation Reports (with Firebase Storage bucket upload)
       await _syncInvestigationReportsTable(db, httpClient, projectId, apiKey, clinicId);
 
+      // 7. Sync Investigation Measurements
+      await _syncTable(db, httpClient, projectId, apiKey, clinicId, 'investigation_measurements', (row) => row['id'].toString());
+
+      // 8. Sync Investigation Diagnoses
+      await _syncTable(db, httpClient, projectId, apiKey, clinicId, 'investigation_diagnoses', (row) => row['id'].toString());
+
       httpClient.close();
 
       // Update backup metadata
@@ -369,7 +375,7 @@ class SyncService {
     // We disable foreign keys temporarily to allow bulk tables seeding without ordering blockages
     await db.execute('PRAGMA foreign_keys = OFF;');
 
-    final tables = ['roles', 'users', 'patients', 'patient_visits', 'bills'];
+    final tables = ['roles', 'users', 'patients', 'patient_visits', 'bills', 'investigation_reports', 'investigation_measurements', 'investigation_diagnoses'];
     double stepSize = 1.0 / tables.length;
 
     try {

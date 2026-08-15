@@ -357,6 +357,72 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     return null;
   }
 
+  void _showPreviousInvestigationsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.biotech, color: Colors.teal.shade800),
+              const SizedBox(width: 10),
+              const Text('Historical Medical Investigations'),
+            ],
+          ),
+          content: SizedBox(
+            width: 700,
+            height: 500,
+            child: FutureBuilder<List<InvestigationMeasurement>>(
+              future: widget.patient.id != null
+                  ? DatabaseHelper.instance.getMeasurementsForPatient(widget.patient.id!)
+                  : Future.value([]),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final measurements = snapshot.data ?? [];
+                if (measurements.isEmpty) {
+                  return const Center(
+                    child: Text('No historical structured measurements recorded for this patient.'),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: measurements.length,
+                  itemBuilder: (context, index) {
+                    final m = measurements[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.teal.shade50,
+                          child: Icon(Icons.analytics, color: Colors.teal.shade800, size: 20),
+                        ),
+                        title: Text(m.parameterName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Ref Range: ${m.referenceRange ?? "N/A"}'),
+                        trailing: Text(
+                          m.valueText,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.teal.shade900),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _saveConsultation() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -838,7 +904,17 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                       ),
 
                       // f. Investigations
-                      _buildSectionHeader('Investigations', Icons.science),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildSectionHeader('Investigations', Icons.science),
+                          TextButton.icon(
+                            onPressed: _showPreviousInvestigationsDialog,
+                            icon: const Icon(Icons.biotech, size: 18),
+                            label: const Text('View Historical Test Intelligence'),
+                          ),
+                        ],
+                      ),
                       _buildFreeTextField(
                         controller: _investigationsController,
                         hintText: 'Enter investigations / lab test details...',

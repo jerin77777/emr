@@ -43,6 +43,7 @@ dependencies:
   printing: ^5.13.3
   crypto: ^3.0.7
   image: ^4.3.0
+  syncfusion_flutter_pdf: ^28.2.3
 
 dev_dependencies:
   flutter_test:
