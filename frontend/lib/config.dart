@@ -1,1 +1,1 @@
-const bool isDemoVersion = true;
+const bool isDemoVersion = false;
