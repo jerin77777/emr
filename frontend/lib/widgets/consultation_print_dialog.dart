@@ -9,6 +9,67 @@ import '../models/models.dart';
 import '../services/document_pdf_generator.dart';
 import '../utils/date_formatter.dart';
 
+Map<String, String?> _splitAdviceAndPrescription(String? fullAdvice) {
+  if (fullAdvice == null || fullAdvice.trim().isEmpty) {
+    return {'advice': null, 'prescription': null};
+  }
+
+  final lines = fullAdvice.split('\n');
+  final adviceLines = <String>[];
+  final prescriptionLines = <String>[];
+  bool inPrescription = false;
+
+  final rxRegExp = RegExp(r'^\s*(prescriptions?|rx)\s*:?\s*$', caseSensitive: false);
+
+  for (final line in lines) {
+    if (rxRegExp.hasMatch(line)) {
+      inPrescription = true;
+      continue;
+    }
+    if (inPrescription) {
+      prescriptionLines.add(line);
+    } else {
+      adviceLines.add(line);
+    }
+  }
+
+  String? advice = adviceLines.join('\n').trim();
+  String? prescription = prescriptionLines.join('\n').trim();
+
+  if (!inPrescription) {
+    int rxIndex = -1;
+    for (int i = 0; i < lines.length; i++) {
+      final lowerLine = lines[i].toLowerCase().trim();
+      if (lowerLine.startsWith('prescription:') || lowerLine.startsWith('prescriptions:') || lowerLine.startsWith('rx:')) {
+        rxIndex = i;
+        break;
+      }
+    }
+
+    if (rxIndex != -1) {
+      final beforeLines = lines.sublist(0, rxIndex);
+      final afterLines = lines.sublist(rxIndex);
+      final firstRxLine = afterLines[0];
+      final colonIndex = firstRxLine.indexOf(':');
+      afterLines[0] = firstRxLine.substring(colonIndex + 1).trim();
+
+      advice = beforeLines.join('\n').trim();
+      prescription = afterLines.join('\n').trim();
+    }
+  }
+
+  final lowerAdvice = advice.toLowerCase().trim();
+  if (lowerAdvice.startsWith('advice:')) {
+    final colonIndex = advice.indexOf(':');
+    advice = advice.substring(colonIndex + 1).trim();
+  }
+
+  return {
+    'advice': advice.isEmpty ? null : advice,
+    'prescription': prescription.isEmpty ? null : prescription,
+  };
+}
+
 /// Helper function to format a consultation record into a standard printable document string.
 String generateConsultationPrintText({
   required String patientName,
@@ -58,7 +119,7 @@ String generateConsultationPrintText({
   buffer.writeln(chiefComplaint != null && chiefComplaint.trim().isNotEmpty ? chiefComplaint : 'None documented');
   buffer.writeln();
 
-  buffer.writeln('HISTORY:');
+  buffer.writeln('HISTORY OF PRESENT ILLNESS:');
   buffer.writeln(history != null && history.trim().isNotEmpty ? history : 'None documented');
   buffer.writeln();
 
@@ -96,9 +157,25 @@ String generateConsultationPrintText({
   }
   buffer.writeln();
 
-  buffer.writeln('ADVICE & PRESCRIPTION:');
-  buffer.writeln(advice != null && advice.trim().isNotEmpty ? advice : 'None documented');
-  buffer.writeln();
+  final adviceParts = _splitAdviceAndPrescription(advice);
+  final adviceText = adviceParts['advice'];
+  final prescriptionText = adviceParts['prescription'];
+
+  if (adviceText != null && adviceText.isNotEmpty) {
+    buffer.writeln('ADVICE:');
+    buffer.writeln(adviceText);
+    buffer.writeln();
+  }
+  if (prescriptionText != null && prescriptionText.isNotEmpty) {
+    buffer.writeln('PRESCRIPTION:');
+    buffer.writeln(prescriptionText);
+    buffer.writeln();
+  }
+  if ((adviceText == null || adviceText.isEmpty) && (prescriptionText == null || prescriptionText.isEmpty)) {
+    buffer.writeln('ADVICE & PRESCRIPTION:');
+    buffer.writeln('None documented');
+    buffer.writeln();
+  }
 
   if (referralTo != null && referralTo.trim().isNotEmpty) {
     buffer.writeln('REFERRAL TO:');
@@ -583,55 +660,102 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                 const SizedBox(height: 16),
 
                 // 4. Clinical Details Section
-                _previewSectionHeader('1. CLINICAL SYMPTOMS & HISTORY'),
-                _previewClinicalBlock('Chief Complaint', widget.visit.chiefComplaint),
-                _previewClinicalBlock('History of Present Illness', widget.visit.history),
-                _previewClinicalBlock('Past Medical History', widget.visit.pastMedicalHistory),
+                if ((widget.visit.chiefComplaint != null && widget.visit.chiefComplaint!.trim().isNotEmpty) ||
+                    (widget.visit.pastMedicalHistory != null && widget.visit.pastMedicalHistory!.trim().isNotEmpty)) ...[
+                  _previewSectionHeader('CLINICAL SYMPTOMS & HISTORY'),
+                  _previewClinicalBlock('Chief Complaint', widget.visit.chiefComplaint),
+                  _previewClinicalBlock('Past Medical History', widget.visit.pastMedicalHistory),
+                  const SizedBox(height: 10),
+                ],
+
+                if (widget.visit.history != null && widget.visit.history!.trim().isNotEmpty) ...[
+                  _previewSectionHeader('HISTORY OF PRESENT ILLNESS'),
+                  Text(widget.visit.history!, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+                  const SizedBox(height: 10),
+                ],
 
                 // 5. Vitals Section
-                _previewSectionHeader('2. VITAL SIGNS & MEASUREMENTS'),
-                const SizedBox(height: 6),
-                Table(
-                  border: TableBorder.all(color: Colors.grey.shade300, width: 0.5),
-                  children: [
-                    TableRow(
-                      decoration: BoxDecoration(color: Colors.grey.shade100),
-                      children: [
-                        _previewTableHeaderCell('BP (mmHg)'),
-                        _previewTableHeaderCell('Pulse (bpm)'),
-                        _previewTableHeaderCell('Temp'),
-                        _previewTableHeaderCell('SPO2 (%)'),
-                      ],
-                    ),
-                    TableRow(
-                      children: [
-                        _previewTableCell(VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false)),
-                        _previewTableCell(VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false)),
-                        _previewTableCell(VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false)),
-                        _previewTableCell(VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false)),
-                      ],
-                    ),
-                  ],
-                ),
+                if (VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false).isNotEmpty ||
+                    VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false).isNotEmpty ||
+                    VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isNotEmpty ||
+                    VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isNotEmpty) ...[
+                  _previewSectionHeader('VITAL SIGNS & MEASUREMENTS'),
+                  const SizedBox(height: 6),
+                  Table(
+                    border: TableBorder.all(color: Colors.grey.shade300, width: 0.5),
+                    children: [
+                      TableRow(
+                        decoration: BoxDecoration(color: Colors.grey.shade100),
+                        children: [
+                          _previewTableHeaderCell('BP (mmHg)'),
+                          _previewTableHeaderCell('Pulse (bpm)'),
+                          _previewTableHeaderCell('Temp'),
+                          _previewTableHeaderCell('SPO2 (%)'),
+                        ],
+                      ),
+                      TableRow(
+                        children: [
+                          _previewTableCell(VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false)),
+                          _previewTableCell(VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false)),
+                          _previewTableCell(VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false)),
+                          _previewTableCell(VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
 
                 // 6. Examination & Investigations
-                _previewSectionHeader('3. EXAMINATION & INVESTIGATIONS'),
-                _previewClinicalBlock('Systemic Examination', widget.visit.systemicExamination),
-                _previewClinicalBlock('Investigations Ordered', widget.visit.investigations),
+                if ((widget.visit.systemicExamination != null && widget.visit.systemicExamination!.trim().isNotEmpty) ||
+                    (widget.visit.investigations != null && widget.visit.investigations!.trim().isNotEmpty)) ...[
+                  _previewSectionHeader('EXAMINATION & INVESTIGATIONS'),
+                  _previewClinicalBlock('Systemic Examination', widget.visit.systemicExamination),
+                  _previewClinicalBlock('Investigations Ordered', widget.visit.investigations),
+                  const SizedBox(height: 10),
+                ],
 
                 // 7. Diagnosis & Plan
-                _previewSectionHeader('4. DIAGNOSIS & PRESCRIPTION PLAN'),
-                _previewClinicalBlock(
-                  'Diagnosis',
-                  finalDiagnoses.isNotEmpty
-                      ? finalDiagnoses.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n')
-                      : (widget.visit.diagnosis != null && widget.visit.diagnosis!.isNotEmpty
-                          ? '${widget.visit.diagnosis!}${widget.visit.diagnosisCode != null ? " (ICD-10: ${widget.visit.diagnosisCode})" : ""}'
-                          : null),
-                ),
-                _previewClinicalBlock('Advice & Prescriptions', widget.visit.advice),
-                _previewClinicalBlock('Referral To', widget.visit.referralTo),
-                _previewClinicalBlock('Follow-up Date', DateFormatter.formatDate(widget.visit.followupDate)),
+                if (finalDiagnoses.isNotEmpty) ...[
+                  _previewSectionHeader('DIAGNOSIS'),
+                  Text(
+                    finalDiagnoses.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n'),
+                    style: const TextStyle(fontSize: 10, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 10),
+                ] else if (widget.visit.diagnosis != null && widget.visit.diagnosis!.isNotEmpty) ...[
+                  _previewSectionHeader('DIAGNOSIS'),
+                  Text(
+                    '${widget.visit.diagnosis!}${widget.visit.diagnosisCode != null ? " (ICD-10: ${widget.visit.diagnosisCode})" : ""}',
+                    style: const TextStyle(fontSize: 10, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                ...() {
+                  final adviceParts = _splitAdviceAndPrescription(widget.visit.advice);
+                  final adviceText = adviceParts['advice'];
+                  final prescriptionText = adviceParts['prescription'];
+                  return [
+                    if (adviceText != null && adviceText.isNotEmpty) ...[
+                      _previewSectionHeader('ADVICE'),
+                      Text(adviceText, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+                      const SizedBox(height: 10),
+                    ],
+                    if (prescriptionText != null && prescriptionText.isNotEmpty) ...[
+                      _previewSectionHeader('PRESCRIPTION'),
+                      Text(prescriptionText, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+                      const SizedBox(height: 10),
+                    ],
+                  ];
+                }(),
+
+                if ((widget.visit.referralTo != null && widget.visit.referralTo!.trim().isNotEmpty) ||
+                    (widget.visit.followupDate != null && widget.visit.followupDate!.trim().isNotEmpty)) ...[
+                  _previewSectionHeader('FOLLOW-UP & REFERRALS'),
+                  _previewClinicalBlock('Referral To', widget.visit.referralTo),
+                  _previewClinicalBlock('Follow-up Date', DateFormatter.formatDate(widget.visit.followupDate)),
+                ],
                 
                 const SizedBox(height: 24),
 
