@@ -16,6 +16,7 @@ import 'services/spell_check_service.dart';
 import 'services/signature_cleanup_service.dart';
 import 'views/welcome_restore_view.dart';
 import 'package:path/path.dart' show join;
+import 'config.dart';
 
 bool debug = true;
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -1093,11 +1094,13 @@ class DashboardShellState extends State<DashboardShell> {
                   ),
                 ),
                 // Sidebar Footer - Demo Limits Usage
-                const Divider(color: Colors.white12, height: 1),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-                  child: DemoUsageSidebarPanel(),
-                ),
+                if (isDemoVersion) ...[
+                  const Divider(color: Colors.white12, height: 1),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                    child: DemoUsageSidebarPanel(),
+                  ),
+                ],
                 // Sidebar Footer - Logout Button
                 const Divider(color: Colors.white12, height: 1),
                 Padding(

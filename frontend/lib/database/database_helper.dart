@@ -6,6 +6,7 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
+import '../config.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -1089,7 +1090,7 @@ class DatabaseHelper {
 
   // === Patient CRUD Operations ===
   Future<int> insertPatient(Patient patient) async {
-    if (patient.id == null) {
+    if (isDemoVersion && patient.id == null) {
       final count = await getActivePatientsCount();
       if (count >= 10) {
         throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 patients for this demo version.');
@@ -1131,7 +1132,7 @@ class DatabaseHelper {
 
   // === PatientVisit CRUD Operations ===
   Future<int> insertPatientVisit(PatientVisit patientVisit) async {
-    if (patientVisit.id == null) {
+    if (isDemoVersion && patientVisit.id == null) {
       final count = await getActivePatientVisitsCount();
       if (count >= 10) {
         throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 consultation visits for this demo version.');
@@ -1210,7 +1211,7 @@ class DatabaseHelper {
 
   // === Bill CRUD Operations ===
   Future<int> insertBill(Bill bill) async {
-    if (bill.id == null) {
+    if (isDemoVersion && bill.id == null) {
       final count = await getActiveBillsCount();
       if (count >= 10) {
         throw Exception('Demo Limit Exceeded: You have reached the maximum limit of 10 bills/invoices for this demo version.');
