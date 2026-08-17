@@ -68,7 +68,8 @@ class EMRApp extends StatelessWidget {
 // 1. LOGIN SCREEN
 // ============================================================================
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool showSetupDialog;
+  const LoginScreen({super.key, this.showSetupDialog = true});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -85,7 +86,9 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkNewInstallation();
+      if (widget.showSetupDialog) {
+        _checkNewInstallation();
+      }
     });
   }
 
@@ -104,92 +107,180 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('New Installation Detected'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('No clinic data was found. How would you like to proceed?',
-                style: TextStyle(fontSize: 13)),
-              const SizedBox(height: 20),
+        bool showBackupOptions = false;
 
-              // Local Hard Drive option
-              InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                  _restoreFromLocalDrive();
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.teal.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.teal.shade50,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.drive_file_move, color: Colors.teal.shade800, size: 26),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Restore from Hard Drive',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
-                            const Text('Browse and select a local backup folder.',
-                              style: TextStyle(fontSize: 11, color: Colors.black54)),
-                          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(showBackupOptions ? 'Select Restore Source' : 'New Installation Detected'),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      showBackupOptions
+                          ? 'How would you like to restore your clinic database?'
+                          : 'No clinic data was found. How would you like to proceed?',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(height: 20),
+                    if (!showBackupOptions) ...[
+                      // Start Fresh option
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.teal.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.teal.shade50,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.add_circle_outline, color: Colors.teal.shade800, size: 26),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Start Fresh',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
+                                    const Text('Configure this as a completely new clinic setup.',
+                                      style: TextStyle(fontSize: 11, color: Colors.black54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Restore Backup option
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            showBackupOptions = true;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.teal.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.teal.shade50,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.history, color: Colors.teal.shade800, size: 26),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Restore Backup',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
+                                    const Text('Restore your existing clinic database from a backup.',
+                                      style: TextStyle(fontSize: 11, color: Colors.black54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      // Local Hard Drive option
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _restoreFromLocalDrive();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.teal.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.teal.shade50,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.drive_file_move, color: Colors.teal.shade800, size: 26),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Restore from Hard Drive',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
+                                    const Text('Browse and select a local backup folder.',
+                                      style: TextStyle(fontSize: 11, color: Colors.black54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Cloud option
+                      InkWell(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showRestoreCredentialsDialog();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.teal.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.teal.shade50,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.cloud_download, color: Colors.teal.shade800, size: 26),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Restore from Cloud',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
+                                    const Text('Enter Firebase credentials to restore from cloud.',
+                                      style: TextStyle(fontSize: 11, color: Colors.black54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 10),
-
-              // Cloud option
-              InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                  _showRestoreCredentialsDialog();
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.teal.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.teal.shade50,
+              actions: [
+                if (showBackupOptions)
+                  TextButton(
+                    onPressed: () {
+                      setDialogState(() {
+                        showBackupOptions = false;
+                      });
+                    },
+                    child: const Text('Back'),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.cloud_download, color: Colors.teal.shade800, size: 26),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Restore from Cloud',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900, fontSize: 14)),
-                            const Text('Enter Firebase credentials to restore from cloud.',
-                              style: TextStyle(fontSize: 11, color: Colors.black54)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Start Fresh'),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );

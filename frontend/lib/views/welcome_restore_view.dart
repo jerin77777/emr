@@ -38,7 +38,7 @@ class _WelcomeRestoreScreenState extends State<WelcomeRestoreScreen> {
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen(showSetupDialog: false)),
       );
     }
   }
