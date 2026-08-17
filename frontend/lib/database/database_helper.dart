@@ -108,6 +108,7 @@ class DatabaseHelper {
   }
 
   Future<void> _migrateSchema(Database db) async {
+    // 1. Roles migration
     try {
       final rolesInfo = await db.rawQuery("PRAGMA table_info('roles')");
       final rolesCols = rolesInfo.map((c) => c['name'] as String).toSet();
@@ -129,6 +130,12 @@ class DatabaseHelper {
       if (!rolesCols.contains('is_system_role')) {
         await db.execute('ALTER TABLE "roles" ADD COLUMN "is_system_role" INTEGER DEFAULT 0;');
       }
+    } catch (e) {
+      debugPrint('Migration error (roles): $e');
+    }
+
+    // 2. Users migration
+    try {
       final usersInfo = await db.rawQuery("PRAGMA table_info('users')");
       final usersCols = usersInfo.map((c) => c['name'] as String).toSet();
       if (!usersCols.contains('user_uuid')) {
@@ -176,7 +183,12 @@ class DatabaseHelper {
       if (!usersCols.contains('signature_updated_at')) {
         await db.execute('ALTER TABLE "users" ADD COLUMN "signature_updated_at" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (users): $e');
+    }
 
+    // Role consolidation and Admin seeding
+    try {
       // Consolidate/Normalize existing doctor roles case-insensitively
       final allDbRoles = await db.query('roles');
       int? canonicalDoctorId;
@@ -262,6 +274,12 @@ class DatabaseHelper {
           whereArgs: [adminId],
         );
       }
+    } catch (e) {
+      debugPrint('Migration error (doctor/admin roles setup): $e');
+    }
+
+    // Patients migration
+    try {
       final patientsInfo = await db.rawQuery("PRAGMA table_info('patients')");
       final patientsCols = patientsInfo.map((c) => c['name'] as String).toSet();
       if (!patientsCols.contains('patient_uuid')) {
@@ -300,7 +318,7 @@ class DatabaseHelper {
       if (!patientsCols.contains('referral_doctor')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "referral_doctor" TEXT;');
       }
-       if (!patientsCols.contains('registration_date')) {
+      if (!patientsCols.contains('registration_date')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "registration_date" TEXT;');
       }
       if (!patientsCols.contains('proof_of_identity')) {
@@ -312,6 +330,12 @@ class DatabaseHelper {
       if (!patientsCols.contains('updated_at')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "updated_at" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (patients): $e');
+    }
+
+    // Patient visits migration
+    try {
       final patientVisitsInfo = await db.rawQuery("PRAGMA table_info('patient_visits')");
       final patientVisitsCols = patientVisitsInfo.map((c) => c['name'] as String).toSet();
       if (!patientVisitsCols.contains('visit_uuid')) {
@@ -380,6 +404,12 @@ class DatabaseHelper {
       if (!patientVisitsCols.contains('doctor_signature_version')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "doctor_signature_version" INTEGER;');
       }
+    } catch (e) {
+      debugPrint('Migration error (patient_visits): $e');
+    }
+
+    // Bills migration
+    try {
       final billsInfo = await db.rawQuery("PRAGMA table_info('bills')");
       final billsCols = billsInfo.map((c) => c['name'] as String).toSet();
       if (!billsCols.contains('bill_number')) {
@@ -421,6 +451,12 @@ class DatabaseHelper {
       if (!billsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "bills" ADD COLUMN "sync_status" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (bills): $e');
+    }
+
+    // Bill items migration
+    try {
       final billItemsInfo = await db.rawQuery("PRAGMA table_info('bill_items')");
       final billItemsCols = billItemsInfo.map((c) => c['name'] as String).toSet();
       if (!billItemsCols.contains('bill_id')) {
@@ -432,6 +468,12 @@ class DatabaseHelper {
       if (!billItemsCols.contains('amount')) {
         await db.execute('ALTER TABLE "bill_items" ADD COLUMN "amount" REAL;');
       }
+    } catch (e) {
+      debugPrint('Migration error (bill_items): $e');
+    }
+
+    // Audit logs migration
+    try {
       final auditLogsInfo = await db.rawQuery("PRAGMA table_info('audit_logs')");
       final auditLogsCols = auditLogsInfo.map((c) => c['name'] as String).toSet();
       if (!auditLogsCols.contains('user_id')) {
@@ -449,6 +491,12 @@ class DatabaseHelper {
       if (!auditLogsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "audit_logs" ADD COLUMN "sync_status" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (audit_logs): $e');
+    }
+
+    // Sync queue migration
+    try {
       final syncQueueInfo = await db.rawQuery("PRAGMA table_info('sync_queue')");
       final syncQueueCols = syncQueueInfo.map((c) => c['name'] as String).toSet();
       if (!syncQueueCols.contains('table_name')) {
@@ -472,6 +520,48 @@ class DatabaseHelper {
       if (!syncQueueCols.contains('created_at')) {
         await db.execute('ALTER TABLE "sync_queue" ADD COLUMN "created_at" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (sync_queue): $e');
+    }
+
+    // Investigation reports migration
+    try {
+      // Ensure investigation_reports table exists
+      await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_reports" (
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "report_uuid" TEXT NOT NULL UNIQUE,
+        "patient_id" INTEGER NOT NULL,
+        "visit_id" INTEGER,
+        "title" TEXT NOT NULL,
+        "category" TEXT,
+        "report_date" TEXT DEFAULT CURRENT_TIMESTAMP,
+        "file_path" TEXT NOT NULL,
+        "file_url" TEXT,
+        "file_name" TEXT,
+        "file_type" TEXT,
+        "file_size" INTEGER,
+        "notes" TEXT,
+        "uploaded_by" INTEGER,
+        "sync_status" TEXT DEFAULT 'pending',
+        "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+        "file_hash" TEXT,
+        "extraction_status" TEXT DEFAULT 'pending',
+        "extraction_version" INTEGER DEFAULT 1,
+        "raw_text" TEXT,
+        "extracted_at" TEXT,
+        "study_date" TEXT,
+        "modality" TEXT,
+        "investigation_type" TEXT,
+        "findings_text" TEXT,
+        "impression_text" TEXT,
+        FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
+        FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
+        FOREIGN KEY ("uploaded_by") REFERENCES "users" ("id") ON DELETE SET NULL
+      );''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_reports_patient" ON "investigation_reports" ("patient_id");''');
+      await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_inv_reports_uuid" ON "investigation_reports" ("report_uuid");''');
+      await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_reports_hash" ON "investigation_reports" ("file_hash");''');
+
       final investigationReportsInfo = await db.rawQuery("PRAGMA table_info('investigation_reports')");
       final investigationReportsCols = investigationReportsInfo.map((c) => c['name'] as String).toSet();
       if (!investigationReportsCols.contains('report_uuid')) {
@@ -549,41 +639,63 @@ class DatabaseHelper {
       if (!investigationReportsCols.contains('impression_text')) {
         await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "impression_text" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (investigation_reports): $e');
+    }
 
+    // Investigation measurements & diagnoses table
+    try {
       await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_measurements" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "report_id" INTEGER NOT NULL,
-  "report_uuid" TEXT NOT NULL,
-  "parameter_name" TEXT NOT NULL,
-  "value_numeric" REAL,
-  "value_text" TEXT NOT NULL,
-  "unit" TEXT,
-  "reference_range" TEXT,
-  "abnormal_flag" TEXT,
-  "confidence" REAL DEFAULT 0.90,
-  "verified" INTEGER DEFAULT 0,
-  "page_number" INTEGER DEFAULT 1,
-  FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
-);''');
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "report_id" INTEGER NOT NULL,
+        "report_uuid" TEXT NOT NULL,
+        "parameter_name" TEXT NOT NULL,
+        "value_numeric" REAL,
+        "value_text" TEXT NOT NULL,
+        "unit" TEXT,
+        "reference_range" TEXT,
+        "abnormal_flag" TEXT,
+        "confidence" REAL DEFAULT 0.90,
+        "verified" INTEGER DEFAULT 0,
+        "page_number" INTEGER DEFAULT 1,
+        FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
+      );''');
       await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_report" ON "investigation_measurements" ("report_id");''');
       await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_param" ON "investigation_measurements" ("parameter_name");''');
 
       await db.execute('''CREATE TABLE IF NOT EXISTS "investigation_diagnoses" (
-  "id" INTEGER PRIMARY KEY AUTOINCREMENT,
-  "report_id" INTEGER NOT NULL,
-  "report_uuid" TEXT NOT NULL,
-  "diagnosis_text" TEXT NOT NULL,
-  "icd10_code" TEXT,
-  "confidence" REAL DEFAULT 0.90,
-  "verified" INTEGER DEFAULT 0,
-  FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
-);''');
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "report_id" INTEGER NOT NULL,
+        "report_uuid" TEXT NOT NULL,
+        "diagnosis_text" TEXT NOT NULL,
+        "icd10_code" TEXT,
+        "confidence" REAL DEFAULT 0.90,
+        "verified" INTEGER DEFAULT 0,
+        FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
+      );''');
       await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_diag_report" ON "investigation_diagnoses" ("report_id");''');
+    } catch (e) {
+      debugPrint('Migration error (investigation_measurements / diagnoses): $e');
+    }
+
+    // Settings migration
+    try {
+      await db.execute('''CREATE TABLE IF NOT EXISTS "settings" (
+        "key" TEXT PRIMARY KEY,
+        "value" TEXT
+      );''');
+
       final settingsInfo = await db.rawQuery("PRAGMA table_info('settings')");
       final settingsCols = settingsInfo.map((c) => c['name'] as String).toSet();
       if (!settingsCols.contains('value')) {
         await db.execute('ALTER TABLE "settings" ADD COLUMN "value" TEXT;');
       }
+    } catch (e) {
+      debugPrint('Migration error (settings): $e');
+    }
+
+    // Documents migration
+    try {
       final documentsInfo = await db.rawQuery("PRAGMA table_info('documents')");
       if (documentsInfo.isEmpty) {
         await db.execute('''CREATE TABLE IF NOT EXISTS "documents" (
@@ -605,7 +717,12 @@ class DatabaseHelper {
         await db.execute('''CREATE INDEX IF NOT EXISTS "idx_documents_patient" ON "documents" ("patient_id");''');
         await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_documents_uuid" ON "documents" ("document_uuid");''');
       }
+    } catch (e) {
+      debugPrint('Migration error (documents): $e');
+    }
 
+    // Consultation diagnoses migration
+    try {
       // Create consultation_diagnoses table
       await db.execute('''CREATE TABLE IF NOT EXISTS "consultation_diagnoses" (
         "id" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -636,7 +753,9 @@ class DatabaseHelper {
           );
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Migration error (consultation_diagnoses): $e');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
