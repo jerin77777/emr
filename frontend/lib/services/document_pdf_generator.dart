@@ -200,58 +200,88 @@ class DocumentPdfGenerator {
             pw.SizedBox(height: 20),
 
             // 4. Clinical Details Section
-            _sectionHeader('1. CLINICAL SYMPTOMS & HISTORY'),
-            _clinicalBlock('Chief Complaint', visit.chiefComplaint),
-            _clinicalBlock('History of Present Illness', visit.history),
-            _clinicalBlock('Past Medical History', visit.pastMedicalHistory),
-            pw.SizedBox(height: 15),
+            if ((visit.chiefComplaint != null && visit.chiefComplaint!.trim().isNotEmpty) ||
+                (visit.pastMedicalHistory != null && visit.pastMedicalHistory!.trim().isNotEmpty)) ...[
+              _sectionHeader('CLINICAL SYMPTOMS & HISTORY'),
+              _clinicalBlock('Chief Complaint', visit.chiefComplaint),
+              _clinicalBlock('Past Medical History', visit.pastMedicalHistory),
+              pw.SizedBox(height: 10),
+            ],
+
+            if (visit.history != null && visit.history!.trim().isNotEmpty) ...[
+              _sectionHeader('HISTORY OF PRESENT ILLNESS'),
+              pw.Text(visit.history!, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
+              pw.SizedBox(height: 10),
+            ],
 
             // 5. Vitals Section
-            _sectionHeader('2. VITAL SIGNS & MEASUREMENTS'),
-            pw.SizedBox(height: 6),
-            pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-              children: [
-                pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                  children: [
-                    _tableHeaderCell('Blood Pressure (mmHg)'),
-                    _tableHeaderCell('Pulse Rate (bpm)'),
-                    _tableHeaderCell('Temperature (°F/°C)'),
-                    _tableHeaderCell('Oxygen Saturation (%)'),
-                  ],
-                ),
-                pw.TableRow(
-                  children: [
-                    _tableCell(VitalsFormatter.formatBp(visit.vitalsBp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatBp(visit.vitalsBp, includePlaceholder: false)),
-                    _tableCell(VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false)),
-                    _tableCell(VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false)),
-                    _tableCell(VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false)),
-                  ],
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 15),
+            if (VitalsFormatter.formatBp(visit.vitalsBp, includePlaceholder: false).isNotEmpty ||
+                VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false).isNotEmpty ||
+                VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false).isNotEmpty ||
+                VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isNotEmpty) ...[
+              _sectionHeader('VITAL SIGNS & MEASUREMENTS'),
+              pw.SizedBox(height: 6),
+              pw.Table(
+                border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+                children: [
+                  pw.TableRow(
+                    decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                    children: [
+                      _tableHeaderCell('Blood Pressure (mmHg)'),
+                      _tableHeaderCell('Pulse Rate (bpm)'),
+                      _tableHeaderCell('Temperature (°F/°C)'),
+                      _tableHeaderCell('Oxygen Saturation (%)'),
+                    ],
+                  ),
+                  pw.TableRow(
+                    children: [
+                      _tableCell(VitalsFormatter.formatBp(visit.vitalsBp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatBp(visit.vitalsBp, includePlaceholder: false)),
+                      _tableCell(VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false)),
+                      _tableCell(VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false)),
+                      _tableCell(VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 15),
+            ],
 
             // 6. Examination & Investigations
-            _sectionHeader('3. EXAMINATION & INVESTIGATIONS'),
-            _clinicalBlock('Systemic Examination', visit.systemicExamination),
-            _clinicalBlock('Investigations Ordered', visit.investigations),
-            pw.SizedBox(height: 15),
+            if ((visit.systemicExamination != null && visit.systemicExamination!.trim().isNotEmpty) ||
+                (visit.investigations != null && visit.investigations!.trim().isNotEmpty)) ...[
+              _sectionHeader('EXAMINATION & INVESTIGATIONS'),
+              _clinicalBlock('Systemic Examination', visit.systemicExamination),
+              _clinicalBlock('Investigations Ordered', visit.investigations),
+              pw.SizedBox(height: 15),
+            ],
 
             // 7. Diagnosis & Plan
-            _sectionHeader('4. DIAGNOSIS & PRESCRIPTION PLAN'),
-            _clinicalBlock(
-              'Diagnosis',
-              visit.diagnoses != null && visit.diagnoses!.isNotEmpty
-                  ? visit.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n')
-                  : (visit.diagnosis != null && visit.diagnosis!.isNotEmpty
-                      ? '${visit.diagnosis!}${visit.diagnosisCode != null ? " (ICD-10: ${visit.diagnosisCode})" : ""}'
-                      : null),
-            ),
-            _clinicalBlock('Advice & Prescriptions', visit.advice),
-            _clinicalBlock('Referral To', visit.referralTo),
-            _clinicalBlock('Follow-up Date', DateFormatter.formatDate(visit.followupDate)),
+            if (visit.diagnoses != null && visit.diagnoses!.isNotEmpty) ...[
+              _sectionHeader('DIAGNOSIS'),
+              pw.Text(
+                visit.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n'),
+                style: const pw.TextStyle(fontSize: 9.5),
+                textAlign: pw.TextAlign.justify,
+              ),
+              pw.SizedBox(height: 10),
+            ] else if (visit.diagnosis != null && visit.diagnosis!.isNotEmpty) ...[
+              _sectionHeader('DIAGNOSIS'),
+              pw.Text(
+                '${visit.diagnosis!}${visit.diagnosisCode != null ? " (ICD-10: ${visit.diagnosisCode})" : ""}',
+                style: const pw.TextStyle(fontSize: 9.5),
+                textAlign: pw.TextAlign.justify,
+              ),
+              pw.SizedBox(height: 10),
+            ],
+
+            ..._buildAdviceAndPrescription(visit.advice),
+
+            if ((visit.referralTo != null && visit.referralTo!.trim().isNotEmpty) ||
+                (visit.followupDate != null && visit.followupDate!.trim().isNotEmpty)) ...[
+              _sectionHeader('FOLLOW-UP & REFERRALS'),
+              _clinicalBlock('Referral To', visit.referralTo),
+              _clinicalBlock('Follow-up Date', DateFormatter.formatDate(visit.followupDate)),
+            ],
             
             pw.SizedBox(height: 40),
 
@@ -605,6 +635,89 @@ class DocumentPdfGenerator {
   }
 
   // --- PDF Widget Helper Builders ---
+
+  static Map<String, String?> _splitAdviceAndPrescription(String? fullAdvice) {
+    if (fullAdvice == null || fullAdvice.trim().isEmpty) {
+      return {'advice': null, 'prescription': null};
+    }
+
+    final lines = fullAdvice.split('\n');
+    final adviceLines = <String>[];
+    final prescriptionLines = <String>[];
+    bool inPrescription = false;
+
+    // Regular expression to match common prescription headers like:
+    // "Prescription", "Prescriptions", "Rx", "Rx:", "Prescription:", etc.
+    final rxRegExp = RegExp(r'^\s*(prescriptions?|rx)\s*:?\s*$', caseSensitive: false);
+
+    for (final line in lines) {
+      if (rxRegExp.hasMatch(line)) {
+        inPrescription = true;
+        continue;
+      }
+      if (inPrescription) {
+        prescriptionLines.add(line);
+      } else {
+        adviceLines.add(line);
+      }
+    }
+
+    String? advice = adviceLines.join('\n').trim();
+    String? prescription = prescriptionLines.join('\n').trim();
+
+    // If we never found a prescription header, check if a line starts with a prescription prefix
+    if (!inPrescription) {
+      int rxIndex = -1;
+      for (int i = 0; i < lines.length; i++) {
+        final lowerLine = lines[i].toLowerCase().trim();
+        if (lowerLine.startsWith('prescription:') || lowerLine.startsWith('prescriptions:') || lowerLine.startsWith('rx:')) {
+          rxIndex = i;
+          break;
+        }
+      }
+
+      if (rxIndex != -1) {
+        final beforeLines = lines.sublist(0, rxIndex);
+        final afterLines = lines.sublist(rxIndex);
+        final firstRxLine = afterLines[0];
+        final colonIndex = firstRxLine.indexOf(':');
+        afterLines[0] = firstRxLine.substring(colonIndex + 1).trim();
+
+        advice = beforeLines.join('\n').trim();
+        prescription = afterLines.join('\n').trim();
+      }
+    }
+
+    // Clean up "Advice:" prefix from advice if it exists
+    final lowerAdvice = advice.toLowerCase().trim();
+    if (lowerAdvice.startsWith('advice:')) {
+      final colonIndex = advice.indexOf(':');
+      advice = advice.substring(colonIndex + 1).trim();
+    }
+
+    return {
+      'advice': advice.isEmpty ? null : advice,
+      'prescription': prescription.isEmpty ? null : prescription,
+    };
+  }
+
+  static List<pw.Widget> _buildAdviceAndPrescription(String? rawAdvice) {
+    final adviceParts = _splitAdviceAndPrescription(rawAdvice);
+    final adviceText = adviceParts['advice'];
+    final prescriptionText = adviceParts['prescription'];
+    return [
+      if (adviceText != null && adviceText.isNotEmpty) ...[
+        _sectionHeader('ADVICE'),
+        pw.Text(adviceText, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
+        pw.SizedBox(height: 10),
+      ],
+      if (prescriptionText != null && prescriptionText.isNotEmpty) ...[
+        _sectionHeader('PRESCRIPTION'),
+        pw.Text(prescriptionText, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
+        pw.SizedBox(height: 10),
+      ],
+    ];
+  }
 
   static pw.Widget _infoRow(String label, String value) {
     return pw.RichText(
