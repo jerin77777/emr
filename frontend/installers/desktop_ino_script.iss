@@ -86,7 +86,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; DLL files
-Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Flutter application data
 Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
