@@ -74,11 +74,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; ============================================================
 
 [Tasks]
-
-Name: "desktopicon";
-Description: "{cm:CreateDesktopIcon}";
-GroupDescription: "{cm:AdditionalIcons}";
-Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 ; ============================================================
 ; Application Files
@@ -87,24 +83,16 @@ Flags: unchecked
 [Files]
 
 ; Main executable
-Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\{#MyAppExeName}";
-DestDir: "{app}";
-Flags: ignoreversion
+Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; DLL files
-Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\*.dll";
-DestDir: "{app}";
-Flags: ignoreversion
+Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Flutter application data
-Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\data\*";
-DestDir: "{app}\data";
-Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "D:\Works\Clinic EHR System\emr\frontend\build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Visual C++ Redistributable
-Source: "D:\Works\Clinic EHR System\emr\frontend\installers\vcredist_x64.exe";
-DestDir: "{tmp}";
-Flags: deleteafterinstall
+Source: "D:\Works\Clinic EHR System\emr\frontend\installers\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 ; ============================================================
 ; Shortcuts
@@ -113,13 +101,10 @@ Flags: deleteafterinstall
 [Icons]
 
 ; Start Menu shortcut
-Name: "{autoprograms}\{#MyAppName}";
-Filename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 
 ; Desktop shortcut
-Name: "{autodesktop}\{#MyAppName}";
-Filename: "{app}\{#MyAppExeName}";
-Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 ; ============================================================
 ; Installation / First Run
@@ -128,12 +113,7 @@ Tasks: desktopicon
 [Run]
 
 ; Install Microsoft Visual C++ Runtime
-Filename: "{tmp}\vcredist_x64.exe";
-Parameters: "/install /quiet /norestart";
-StatusMsg: "Installing Microsoft Visual C++ Runtime...";
-Flags: waituntilterminated
+Filename: "{tmp}\vcredist_x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft Visual C++ Runtime..."; Flags: waituntilterminated
 
 ; Launch application after installation
-Filename: "{app}\{#MyAppExeName}";
-Description: "Launch {#MyAppName}";
-Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
