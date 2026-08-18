@@ -131,6 +131,12 @@ class DatabaseHelper {
       if (!rolesCols.contains('is_system_role')) {
         await db.execute('ALTER TABLE "roles" ADD COLUMN "is_system_role" INTEGER DEFAULT 0;');
       }
+      if (!rolesCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!rolesCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "roles" ADD COLUMN "last_synced_at" TEXT;');
+      }
     } catch (e) {
       debugPrint('Migration error (roles): $e');
     }
@@ -183,6 +189,12 @@ class DatabaseHelper {
       }
       if (!usersCols.contains('signature_updated_at')) {
         await db.execute('ALTER TABLE "users" ADD COLUMN "signature_updated_at" TEXT;');
+      }
+      if (!usersCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!usersCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "last_synced_at" TEXT;');
       }
     } catch (e) {
       debugPrint('Migration error (users): $e');
@@ -328,6 +340,9 @@ class DatabaseHelper {
       if (!patientsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "sync_status" TEXT;');
       }
+      if (!patientsCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "patients" ADD COLUMN "last_synced_at" TEXT;');
+      }
       if (!patientsCols.contains('updated_at')) {
         await db.execute('ALTER TABLE "patients" ADD COLUMN "updated_at" TEXT;');
       }
@@ -399,6 +414,9 @@ class DatabaseHelper {
       if (!patientVisitsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "sync_status" TEXT;');
       }
+      if (!patientVisitsCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "last_synced_at" TEXT;');
+      }
       if (!patientVisitsCols.contains('created_at')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "created_at" TEXT;');
       }
@@ -451,6 +469,9 @@ class DatabaseHelper {
       }
       if (!billsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "bills" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!billsCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "bills" ADD COLUMN "last_synced_at" TEXT;');
       }
     } catch (e) {
       debugPrint('Migration error (bills): $e');
@@ -607,6 +628,9 @@ class DatabaseHelper {
       if (!investigationReportsCols.contains('sync_status')) {
         await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "sync_status" TEXT;');
       }
+      if (!investigationReportsCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "last_synced_at" TEXT;');
+      }
       if (!investigationReportsCols.contains('created_at')) {
         await db.execute('ALTER TABLE "investigation_reports" ADD COLUMN "created_at" TEXT;');
       }
@@ -675,6 +699,24 @@ class DatabaseHelper {
         FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
       );''');
       await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_diag_report" ON "investigation_diagnoses" ("report_id");''');
+
+      final invMeasInfo = await db.rawQuery("PRAGMA table_info('investigation_measurements')");
+      final invMeasCols = invMeasInfo.map((c) => c['name'] as String).toSet();
+      if (!invMeasCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "investigation_measurements" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!invMeasCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "investigation_measurements" ADD COLUMN "last_synced_at" TEXT;');
+      }
+
+      final invDiagInfo = await db.rawQuery("PRAGMA table_info('investigation_diagnoses')");
+      final invDiagCols = invDiagInfo.map((c) => c['name'] as String).toSet();
+      if (!invDiagCols.contains('sync_status')) {
+        await db.execute('ALTER TABLE "investigation_diagnoses" ADD COLUMN "sync_status" TEXT;');
+      }
+      if (!invDiagCols.contains('last_synced_at')) {
+        await db.execute('ALTER TABLE "investigation_diagnoses" ADD COLUMN "last_synced_at" TEXT;');
+      }
     } catch (e) {
       debugPrint('Migration error (investigation_measurements / diagnoses): $e');
     }
@@ -740,7 +782,7 @@ class DatabaseHelper {
       await db.execute('''CREATE INDEX IF NOT EXISTS "idx_visits_followup" ON "patient_visits" ("followup_date");''');
 
       // Migrate legacy diagnosis data to consultation_diagnoses if missing
-      final legacyVisits = await db.rawQuery('SELECT id, diagnosis, diagnosis_code FROM patient_visits WHERE diagnosis IS NOT NULL AND diagnosis != ""');
+      final legacyVisits = await db.rawQuery("SELECT id, diagnosis, diagnosis_code FROM patient_visits WHERE diagnosis IS NOT NULL AND diagnosis != ''");
       for (final v in legacyVisits) {
         final visitId = v['id'] as int;
         final diag = v['diagnosis'] as String;
@@ -767,7 +809,9 @@ class DatabaseHelper {
   "permissions" TEXT,
   "role_key" TEXT,
   "is_system_role" INTEGER DEFAULT 0,
-  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
+  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_roles_name" ON "roles" ("role_name");''');
     await db.execute('''CREATE TABLE IF NOT EXISTS "users" (
@@ -786,7 +830,9 @@ class DatabaseHelper {
   "original_signature_file_path" TEXT,
   "signature_version" INTEGER DEFAULT 1,
   "signature_updated_at" TEXT,
-  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP
+  "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
+  "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_users_username" ON "users" ("username");''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_users_role" ON "users" ("role");''');
@@ -807,6 +853,7 @@ class DatabaseHelper {
   "registration_date" TEXT DEFAULT CURRENT_TIMESTAMP,
   "proof_of_identity" TEXT,
   "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT,
   "updated_at" TEXT DEFAULT CURRENT_TIMESTAMP
 );''');
     await db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS "idx_patients_code" ON "patients" ("patient_code");''');
@@ -834,6 +881,7 @@ class DatabaseHelper {
   "referral_to" TEXT,
   "followup_date" TEXT,
   "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT,
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
   "doctor_signature_version" INTEGER,
   FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE,
@@ -856,6 +904,7 @@ class DatabaseHelper {
   "payment_method" TEXT,
   "bill_date" TEXT DEFAULT CURRENT_TIMESTAMP,
   "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT,
   FOREIGN KEY ("visit_id") REFERENCES "patient_visits" ("id") ON DELETE SET NULL,
   FOREIGN KEY ("patient_id") REFERENCES "patients" ("id") ON DELETE CASCADE
 );''');
@@ -907,6 +956,7 @@ class DatabaseHelper {
   "notes" TEXT,
   "uploaded_by" INTEGER,
   "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT,
   "created_at" TEXT DEFAULT CURRENT_TIMESTAMP,
   "file_hash" TEXT,
   "extraction_status" TEXT DEFAULT 'pending',
@@ -939,6 +989,8 @@ class DatabaseHelper {
   "confidence" REAL DEFAULT 0.90,
   "verified" INTEGER DEFAULT 0,
   "page_number" INTEGER DEFAULT 1,
+  "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT,
   FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_meas_report" ON "investigation_measurements" ("report_id");''');
@@ -952,6 +1004,8 @@ class DatabaseHelper {
   "icd10_code" TEXT,
   "confidence" REAL DEFAULT 0.90,
   "verified" INTEGER DEFAULT 0,
+  "sync_status" TEXT DEFAULT 'pending',
+  "last_synced_at" TEXT,
   FOREIGN KEY ("report_id") REFERENCES "investigation_reports" ("id") ON DELETE CASCADE
 );''');
     await db.execute('''CREATE INDEX IF NOT EXISTS "idx_inv_diag_report" ON "investigation_diagnoses" ("report_id");''');
