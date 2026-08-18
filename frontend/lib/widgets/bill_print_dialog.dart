@@ -319,18 +319,41 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Header
-                    Center(
-                      child: Column(
-                        children: [
-                          Text(_clinicName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900, letterSpacing: 0.5)),
-                          const SizedBox(height: 2),
-                          Text('Phone: $_clinicPhone | Website: $_clinicWebsite', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-                          const SizedBox(height: 4),
-                          const Text('INVOICE / RECEIPT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.black87)),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_clinicName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900, letterSpacing: 0.5)),
+                              const SizedBox(height: 2),
+                              Text('Phone: $_clinicPhone | Website: $_clinicWebsite', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                              const SizedBox(height: 4),
+                              const Text('INVOICE / RECEIPT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.black87)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 70,
+                          height: 35,
+                          child: Image.asset(
+                            'assets/images/app_logo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text('LOGO', style: TextStyle(fontSize: 8, color: Colors.grey), textAlign: TextAlign.center),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
                     const Divider(),
                     // Info Bar
                     Row(

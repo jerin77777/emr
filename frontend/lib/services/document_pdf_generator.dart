@@ -31,6 +31,12 @@ class DocumentPdfGenerator {
     final clinic = await getClinicDetails();
     final now = DateTime.now();
 
+    pw.ImageProvider? logoImage;
+    try {
+      final logoData = await rootBundle.load('assets/images/app_logo.png');
+      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (_) {}
+
     User? doctor;
     if (visit.doctorId != null) {
       doctor = await DatabaseHelper.instance.getUserById(visit.doctorId!);
@@ -135,17 +141,23 @@ class DocumentPdfGenerator {
                     pw.Text('Phone: ${clinic['phone']!} | Website: ${clinic['website']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
                   ],
                 ),
-                // Reserved space for logo placeholder on the right
-                pw.Container(
-                  width: 80,
-                  height: 40,
-                  alignment: pw.Alignment.center,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300, style: pw.BorderStyle.dashed),
-                    borderRadius: pw.BorderRadius.circular(4),
+                if (logoImage != null)
+                  pw.Container(
+                    width: 80,
+                    height: 50,
+                    child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                  )
+                else
+                  pw.Container(
+                    width: 80,
+                    height: 40,
+                    alignment: pw.Alignment.center,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey300, style: pw.BorderStyle.dashed),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Text('CLINIC LOGO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
                   ),
-                  child: pw.Text('CLINIC LOGO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
-                ),
               ],
             ),
             pw.SizedBox(height: 12),
@@ -350,6 +362,12 @@ class DocumentPdfGenerator {
     final clinic = await getClinicDetails();
     final now = DateTime.now();
 
+    pw.ImageProvider? logoImage;
+    try {
+      final logoData = await rootBundle.load('assets/images/app_logo.png');
+      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (_) {}
+
     User? doctor;
     PatientVisit? visit;
     if (bill.visitId != null) {
@@ -470,16 +488,23 @@ class DocumentPdfGenerator {
                     pw.Text('Phone: ${clinic['phone']!} | Website: ${clinic['website']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
                   ],
                 ),
-                pw.Container(
-                  width: 80,
-                  height: 40,
-                  alignment: pw.Alignment.center,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300, style: pw.BorderStyle.dashed),
-                    borderRadius: pw.BorderRadius.circular(4),
+                if (logoImage != null)
+                  pw.Container(
+                    width: 80,
+                    height: 50,
+                    child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                  )
+                else
+                  pw.Container(
+                    width: 80,
+                    height: 40,
+                    alignment: pw.Alignment.center,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey300, style: pw.BorderStyle.dashed),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Text('CLINIC LOGO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
                   ),
-                  child: pw.Text('CLINIC LOGO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
-                ),
               ],
             ),
             pw.SizedBox(height: 12),

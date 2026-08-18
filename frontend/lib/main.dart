@@ -990,12 +990,14 @@ class DashboardShellState extends State<DashboardShell> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.orange.shade700,
+                                color: isDemoVersion
+                                    ? Colors.orange.shade700
+                                    : Colors.green.shade600,
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
-                                'DEMO VERSION',
-                                style: TextStyle(
+                              child: Text(
+                                isDemoVersion ? 'DEMO VERSION' : 'PRODUCTION VERSION',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
