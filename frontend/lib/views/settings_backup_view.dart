@@ -89,25 +89,108 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
 
     setState(() => _isSavingSettings = true);
     try {
-      await DatabaseHelper.instance.saveSetting('firebase_project_id', _projectController.text.trim());
-      await DatabaseHelper.instance.saveSetting('firebase_api_key', _apiKeyController.text.trim());
-      await DatabaseHelper.instance.saveSetting('clinic_id', _clinicController.text.trim());
+      final projectId = _projectController.text.trim();
+      final apiKey = _apiKeyController.text.trim();
+      final clinicId = _clinicController.text.trim();
+
+      // Always persist entered settings first
+      await DatabaseHelper.instance.saveSetting('firebase_project_id', projectId);
+      await DatabaseHelper.instance.saveSetting('firebase_api_key', apiKey);
+      await DatabaseHelper.instance.saveSetting('clinic_id', clinicId);
+
+      // Verify connection with Firebase
+      final testResult = await SyncService.instance.testConnection(
+        projectId: projectId,
+        apiKey: apiKey,
+        clinicId: clinicId,
+      );
+
+      setState(() {
+        _connectionTestStatus = testResult;
+      });
+
+      if (!testResult.startsWith('Connected')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Settings saved, but connection failed:\n$testResult'),
+              backgroundColor: Colors.red.shade700,
+              duration: const Duration(seconds: 8),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+              ),
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Firebase backup settings saved!'), backgroundColor: Colors.green),
-        );
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        if (testResult.contains('Note:') || testResult.contains('Warning')) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(testResult),
+              backgroundColor: Colors.amber.shade900,
+              duration: const Duration(seconds: 8),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () => messenger.hideCurrentSnackBar(),
+              ),
+            ),
+          );
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Firebase settings saved & verified! Starting backup...'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
       
-      SyncService.instance.triggerManualBackup();
+      final backupError = await SyncService.instance.triggerManualBackup();
+      if (backupError != null && mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Backup notice: $backupError'),
+            backgroundColor: backupError.contains('warning') || backupError.contains('notice')
+                ? Colors.amber.shade900
+                : Colors.red.shade700,
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () => messenger.hideCurrentSnackBar(),
+            ),
+          ),
+        );
+      }
     } catch (e) {
+      final cleanError = SyncService.extractErrorMessage(e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving settings: $e'), backgroundColor: Colors.red),
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Error saving settings: $cleanError'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 8),
+          ),
         );
       }
     } finally {
-      setState(() => _isSavingSettings = false);
+      if (mounted) {
+        setState(() => _isSavingSettings = false);
+      }
     }
   }
 
@@ -128,6 +211,42 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
       _isTestingConnection = false;
       _connectionTestStatus = result;
     });
+
+    if (mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      if (result.contains('Note:') || result.contains('Warning')) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(result),
+            backgroundColor: Colors.amber.shade900,
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () => messenger.hideCurrentSnackBar(),
+            ),
+          ),
+        );
+      } else if (result.startsWith('Connected')) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(result), backgroundColor: Colors.green),
+        );
+      } else {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(result),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () => messenger.hideCurrentSnackBar(),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   // --- Local Backup Action ---
@@ -471,6 +590,7 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
   }
 
   void _showRestoreError(String error) {
+    final cleanError = SyncService.extractErrorMessage(error);
     showDialog(
       context: context,
       builder: (context) {
@@ -483,7 +603,7 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
               Text('Restore Failed'),
             ],
           ),
-          content: Text('An error occurred during restoration:\n\n$error'),
+          content: Text('An error occurred during restoration:\n\n$cleanError'),
           actions: [
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
@@ -732,7 +852,34 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                                 )
                               else
                                 ElevatedButton.icon(
-                                  onPressed: SyncService.instance.triggerManualBackup,
+                                  onPressed: () async {
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    final err = await SyncService.instance.triggerManualBackup();
+                                    if (!mounted) return;
+                                    messenger.hideCurrentSnackBar();
+                                    if (err != null) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text('Backup Failed: $err'),
+                                          backgroundColor: Colors.red.shade700,
+                                          duration: const Duration(seconds: 8),
+                                          action: SnackBarAction(
+                                            label: 'Dismiss',
+                                            textColor: Colors.white,
+                                            onPressed: () => messenger.hideCurrentSnackBar(),
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      messenger.showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Backup completed successfully!'),
+                                          backgroundColor: Colors.green,
+                                          duration: Duration(seconds: 3),
+                                        ),
+                                      );
+                                    }
+                                  },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.teal.shade700,
                                     foregroundColor: Colors.white,
@@ -854,56 +1001,83 @@ class _SettingsBackupViewState extends State<SettingsBackupView> {
                             ),
                             if (_connectionTestStatus.isNotEmpty) ...[
                               const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: _connectionTestStatus.startsWith('Connected')
+                              Builder(
+                                builder: (context) {
+                                  final hasWarning = _connectionTestStatus.contains('Note:') || _connectionTestStatus.contains('Warning');
+                                  final isSuccess = _connectionTestStatus.startsWith('Connected') && !hasWarning;
+                                  final isTesting = _connectionTestStatus.startsWith('Testing');
+
+                                  final bgColor = isSuccess
                                       ? Colors.green.shade50
-                                      : _connectionTestStatus.startsWith('Testing')
-                                          ? Colors.blue.shade50
-                                          : Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: _connectionTestStatus.startsWith('Connected')
-                                        ? Colors.green.shade300
-                                        : _connectionTestStatus.startsWith('Testing')
-                                            ? Colors.blue.shade300
-                                            : Colors.red.shade200,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      _connectionTestStatus.startsWith('Connected')
-                                          ? Icons.check_circle
-                                          : _connectionTestStatus.startsWith('Testing')
-                                              ? Icons.sync
-                                              : Icons.error_outline,
-                                      color: _connectionTestStatus.startsWith('Connected')
-                                          ? Colors.green.shade800
-                                          : _connectionTestStatus.startsWith('Testing')
+                                      : hasWarning
+                                          ? Colors.amber.shade50
+                                          : isTesting
+                                              ? Colors.blue.shade50
+                                              : Colors.red.shade50;
+
+                                  final borderColor = isSuccess
+                                      ? Colors.green.shade300
+                                      : hasWarning
+                                          ? Colors.amber.shade400
+                                          : isTesting
+                                              ? Colors.blue.shade300
+                                              : Colors.red.shade200;
+
+                                  final iconColor = isSuccess
+                                      ? Colors.green.shade800
+                                      : hasWarning
+                                          ? Colors.amber.shade900
+                                          : isTesting
                                               ? Colors.blue.shade800
-                                              : Colors.red.shade800,
-                                      size: 20,
+                                              : Colors.red.shade800;
+
+                                  final textColor = isSuccess
+                                      ? Colors.green.shade900
+                                      : hasWarning
+                                          ? Colors.brown.shade900
+                                          : isTesting
+                                              ? Colors.blue.shade900
+                                              : Colors.red.shade900;
+
+                                  final icon = isSuccess
+                                      ? Icons.check_circle
+                                      : hasWarning
+                                          ? Icons.warning_amber_rounded
+                                          : isTesting
+                                              ? Icons.sync
+                                              : Icons.error_outline;
+
+                                  return Container(
+                                    padding: const EdgeInsets.all(12),
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: bgColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: borderColor),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _connectionTestStatus,
-                                        style: TextStyle(
-                                          color: _connectionTestStatus.startsWith('Connected')
-                                              ? Colors.green.shade900
-                                              : _connectionTestStatus.startsWith('Testing')
-                                                  ? Colors.blue.shade900
-                                                  : Colors.red.shade900,
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 13,
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2.0),
+                                          child: Icon(icon, color: iconColor, size: 20),
                                         ),
-                                      ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            _connectionTestStatus,
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 13,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                             ],
                           ],

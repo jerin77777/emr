@@ -15,7 +15,9 @@ import 'utils/crypto_helper.dart';
 import 'services/spell_check_service.dart';
 import 'services/signature_cleanup_service.dart';
 import 'views/welcome_restore_view.dart';
+import 'widgets/custom_title_bar.dart';
 import 'package:path/path.dart' show join;
+import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'config.dart';
 
 bool debug = true;
@@ -37,6 +39,18 @@ void main() async {
 
   SyncService.instance.startSyncLoop();
   runApp(EMRApp(isFirstLaunch: !dbExists));
+
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    doWhenWindowReady(() {
+      const initialSize = Size(1280, 800);
+      const minSize = Size(1024, 650);
+      appWindow.minSize = minSize;
+      appWindow.size = initialSize;
+      appWindow.alignment = Alignment.center;
+      appWindow.title = "Anything EMR";
+      appWindow.show();
+    });
+  }
 }
 
 class EMRApp extends StatelessWidget {
@@ -59,6 +73,17 @@ class EMRApp extends StatelessWidget {
       ),
       home: isFirstLaunch ? const WelcomeRestoreScreen() : const LoginScreen(),
       builder: (context, child) {
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          return Material(
+            color: const Color(0xFF00241E),
+            child: Column(
+              children: [
+                const CustomAppTitleBar(),
+                Expanded(child: child ?? const SizedBox.shrink()),
+              ],
+            ),
+          );
+        }
         return child ?? const SizedBox.shrink();
       },
     );
@@ -417,8 +442,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Restore Failed: $err'),
-                        backgroundColor: Colors.red,
+                        content: Text('Restore Failed: ${SyncService.extractErrorMessage(err)}'),
+                        backgroundColor: Colors.red.shade700,
                       ),
                     );
                   });

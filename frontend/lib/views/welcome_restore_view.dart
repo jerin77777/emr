@@ -292,7 +292,7 @@ class _WelcomeRestoreScreenState extends State<WelcomeRestoreScreen> {
                         Text('Restore Failed'),
                       ],
                     ),
-                    content: Text('Error: $err'),
+                    content: Text('Error: ${SyncService.extractErrorMessage(err)}'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
