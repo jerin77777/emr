@@ -1457,7 +1457,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     final enteredPassword = _passwordController.text.trim();
     String passwordHashToSave;
     if (widget.existingUser != null) {
-      if (enteredPassword == '******' || enteredPassword.isEmpty) {
+      if (enteredPassword.isEmpty || RegExp(r'^\*+$').hasMatch(enteredPassword)) {
         passwordHashToSave = widget.existingUser!.passwordHash;
       } else {
         passwordHashToSave = CryptoHelper.hashPassword(enteredPassword);

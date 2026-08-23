@@ -482,18 +482,18 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.black54)),
-        Expanded(child: Text(value, style: const TextStyle(fontSize: 10, color: Colors.black87))),
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.black54)),
+        Expanded(child: Text(value, style: const TextStyle(fontSize: 9, color: Colors.black87))),
       ],
     );
   }
 
   Widget _previewSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 4),
+      padding: const EdgeInsets.only(top: 6, bottom: 3),
       child: Text(
         title,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
       ),
     );
   }
@@ -501,13 +501,13 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
   Widget _previewClinicalBlock(String label, String? content) {
     if (content == null || content.trim().isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.black54)),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 8.5, color: Colors.black54)),
           const SizedBox(height: 1),
-          Text(content, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+          Text(content, style: const TextStyle(fontSize: 9, color: Colors.black87)),
         ],
       ),
     );
@@ -515,10 +515,10 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
 
   Widget _previewTableHeaderCell(String text) {
     return Padding(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.black87),
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 8, color: Colors.black87),
         textAlign: TextAlign.center,
       ),
     );
@@ -526,10 +526,10 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
 
   Widget _previewTableCell(String text) {
     return Padding(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 9, color: Colors.black87),
+        style: const TextStyle(fontSize: 8, color: Colors.black87),
         textAlign: TextAlign.center,
       ),
     );
@@ -590,13 +590,13 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_clinicName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
-                          const SizedBox(height: 4),
+                          Text(_clinicName, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
+                          const SizedBox(height: 3),
                           if (_clinicAddress.isNotEmpty) ...[
-                            Text(_clinicAddress, style: TextStyle(fontSize: 11, color: Colors.grey.shade800)),
+                            Text(_clinicAddress, style: TextStyle(fontSize: 9.5, color: Colors.grey.shade800)),
                             const SizedBox(height: 2),
                           ],
-                          Text('Phone: $_clinicPhone | Website: $_clinicWebsite', style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+                          Text('Phone: $_clinicPhone | Website: $_clinicWebsite', style: TextStyle(fontSize: 9, color: Colors.grey.shade700)),
                         ],
                       ),
                     ),
@@ -612,31 +612,31 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                             border: Border.all(color: Colors.grey.shade300),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text('LOGO', style: TextStyle(fontSize: 8, color: Colors.grey), textAlign: TextAlign.center),
+                          child: const Text('LOGO', style: TextStyle(fontSize: 7.5, color: Colors.grey), textAlign: TextAlign.center),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Divider(thickness: 1.5, color: Colors.teal.shade700),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
+                Divider(thickness: 1.2, color: Colors.teal.shade700),
+                const SizedBox(height: 6),
 
                 // 2. Title
                 Center(
                   child: Text(
                     widget.isDraft ? 'CLINIC VISIT RECORD DRAFT' : 'CLINIC VISIT RECORD',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.teal.shade900),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.teal.shade900),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
                 // 3. Patient Info Grid
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: Colors.teal.shade50,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Column(
                     children: [
@@ -646,14 +646,14 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                           Expanded(child: _previewInfoRow('Patient ID', widget.patient.patientCode)),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           Expanded(child: _previewInfoRow('Age / Gender', '${widget.patient.age ?? "N/A"} yrs / ${widget.patient.gender}')),
                           Expanded(child: _previewInfoRow('Date of Birth', DateFormatter.formatDate(widget.patient.dateOfBirth))),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           Expanded(child: _previewInfoRow('Consultation Date', DateFormatter.formatDate(widget.visit.visitDate))),
@@ -663,7 +663,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
 
                 // 4. Clinical Details Section
                 if ((widget.visit.chiefComplaint != null && widget.visit.chiefComplaint!.trim().isNotEmpty) ||
@@ -671,13 +671,13 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                   _previewSectionHeader('CLINICAL SYMPTOMS & HISTORY'),
                   _previewClinicalBlock('Chief Complaint', widget.visit.chiefComplaint),
                   _previewClinicalBlock('Past Medical History', widget.visit.pastMedicalHistory),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                 ],
 
                 if (widget.visit.history != null && widget.visit.history!.trim().isNotEmpty) ...[
                   _previewSectionHeader('HISTORY OF PRESENT ILLNESS'),
-                  Text(widget.visit.history!, style: const TextStyle(fontSize: 10, color: Colors.black87)),
-                  const SizedBox(height: 10),
+                  Text(widget.visit.history!, style: const TextStyle(fontSize: 9, color: Colors.black87)),
+                  const SizedBox(height: 6),
                 ],
 
                 // 5. Vitals Section
@@ -686,7 +686,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                     VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isNotEmpty ||
                     VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isNotEmpty) ...[
                   _previewSectionHeader('VITAL SIGNS & MEASUREMENTS'),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Table(
                     border: TableBorder.all(color: Colors.grey.shade300, width: 0.5),
                     children: [
@@ -709,7 +709,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                 ],
 
                 // 6. Examination & Investigations
@@ -718,7 +718,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                   _previewSectionHeader('EXAMINATION & INVESTIGATIONS'),
                   _previewClinicalBlock('Systemic Examination', widget.visit.systemicExamination),
                   _previewClinicalBlock('Investigations Ordered', widget.visit.investigations),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                 ],
 
                 // 7. Diagnosis & Plan
@@ -726,16 +726,16 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                   _previewSectionHeader('DIAGNOSIS'),
                   Text(
                     finalDiagnoses.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n'),
-                    style: const TextStyle(fontSize: 10, color: Colors.black87),
+                    style: const TextStyle(fontSize: 9, color: Colors.black87),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                 ] else if (widget.visit.diagnosis != null && widget.visit.diagnosis!.isNotEmpty) ...[
                   _previewSectionHeader('DIAGNOSIS'),
                   Text(
                     '${widget.visit.diagnosis!}${widget.visit.diagnosisCode != null ? " (ICD-10: ${widget.visit.diagnosisCode})" : ""}',
-                    style: const TextStyle(fontSize: 10, color: Colors.black87),
+                    style: const TextStyle(fontSize: 9, color: Colors.black87),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                 ],
 
                 ...() {
@@ -745,13 +745,13 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                   return [
                     if (adviceText != null && adviceText.isNotEmpty) ...[
                       _previewSectionHeader('ADVICE'),
-                      Text(adviceText, style: const TextStyle(fontSize: 10, color: Colors.black87)),
-                      const SizedBox(height: 10),
+                      Text(adviceText, style: const TextStyle(fontSize: 9, color: Colors.black87)),
+                      const SizedBox(height: 6),
                     ],
                     if (prescriptionText != null && prescriptionText.isNotEmpty) ...[
                       _previewSectionHeader('PRESCRIPTION'),
-                      Text(prescriptionText, style: const TextStyle(fontSize: 10, color: Colors.black87)),
-                      const SizedBox(height: 10),
+                      Text(prescriptionText, style: const TextStyle(fontSize: 9, color: Colors.black87)),
+                      const SizedBox(height: 6),
                     ],
                   ];
                 }(),
@@ -763,7 +763,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                   _previewClinicalBlock('Follow-up Date', DateFormatter.formatDate(widget.visit.followupDate)),
                 ],
                 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // 8. Sign-off Section
                 Row(
@@ -781,16 +781,16 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                       children: [
                         if (_resolvedSigPath != null && File(_resolvedSigPath!).existsSync()) ...[
                           SizedBox(
-                            height: 40,
+                            height: 30,
                             width: 100,
                             child: Image.file(File(_resolvedSigPath!), fit: BoxFit.contain),
                           ),
                           const SizedBox(height: 4),
                         ] else ...[
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 30),
                         ],
                         Container(
-                          width: 140,
+                          width: 130,
                           decoration: BoxDecoration(
                             border: Border(bottom: BorderSide(color: Colors.grey.shade400, width: 0.8)),
                           ),
@@ -808,7 +808,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                     ),
                   ],
                 ),
-                const Divider(height: 32),
+                const Divider(height: 24),
                 Center(
                   child: Column(
                     children: [

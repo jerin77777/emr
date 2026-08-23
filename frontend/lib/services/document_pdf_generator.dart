@@ -132,50 +132,50 @@ class DocumentPdfGenerator {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(clinic['name']!, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
-                    pw.SizedBox(height: 4),
+                    pw.Text(clinic['name']!, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                    pw.SizedBox(height: 3),
                     if (clinic['address']!.isNotEmpty) ...[
-                      pw.Text(clinic['address']!, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
+                      pw.Text(clinic['address']!, style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800)),
                       pw.SizedBox(height: 2),
                     ],
-                    pw.Text('Phone: ${clinic['phone']!} | Website: ${clinic['website']!}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                    pw.Text('Phone: ${clinic['phone']!} | Website: ${clinic['website']!}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
                   ],
                 ),
                 if (logoImage != null)
                   pw.Container(
-                    width: 80,
-                    height: 50,
+                    width: 70,
+                    height: 40,
                     child: pw.Image(logoImage, fit: pw.BoxFit.contain),
                   )
                 else
                   pw.Container(
-                    width: 80,
-                    height: 40,
+                    width: 70,
+                    height: 35,
                     alignment: pw.Alignment.center,
                     decoration: pw.BoxDecoration(
                       border: pw.Border.all(color: PdfColors.grey300, style: pw.BorderStyle.dashed),
                       borderRadius: pw.BorderRadius.circular(4),
                     ),
-                    child: pw.Text('CLINIC LOGO', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
+                    child: pw.Text('CLINIC LOGO', style: pw.TextStyle(fontSize: 7.5, color: PdfColors.grey500), textAlign: pw.TextAlign.center),
                   ),
               ],
             ),
-            pw.SizedBox(height: 12),
-            pw.Divider(thickness: 1.5, color: PdfColors.teal700),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height: 8),
+            pw.Divider(thickness: 1.2, color: PdfColors.teal700),
+            pw.SizedBox(height: 8),
 
             // 2. Title Header
             pw.Center(
-              child: pw.Text('CONSULTATION RECORD', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2, color: PdfColors.teal900)),
+              child: pw.Text('CONSULTATION RECORD', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2, color: PdfColors.teal900)),
             ),
-            pw.SizedBox(height: 15),
+            pw.SizedBox(height: 10),
 
             // 3. Patient Information Grid
             pw.Container(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.all(8),
               decoration: pw.BoxDecoration(
                 color: PdfColors.teal50,
-                borderRadius: pw.BorderRadius.circular(6),
+                borderRadius: pw.BorderRadius.circular(4),
               ),
               child: pw.Column(
                 children: [
@@ -185,21 +185,21 @@ class DocumentPdfGenerator {
                       pw.Expanded(child: _infoRow('Patient ID', patient.patientCode)),
                     ],
                   ),
-                  pw.SizedBox(height: 6),
+                  pw.SizedBox(height: 4),
                   pw.Row(
                     children: [
                       pw.Expanded(child: _infoRow('Age / Gender', '${patient.age ?? "N/A"} yrs / ${patient.gender}')),
                       pw.Expanded(child: _infoRow('Date of Birth', patient.dateOfBirth)),
                     ],
                   ),
-                  pw.SizedBox(height: 6),
+                  pw.SizedBox(height: 4),
                   pw.Row(
                     children: [
                       pw.Expanded(child: _infoRow('Mobile Number', patient.mobileNumber)),
                       pw.Expanded(child: _infoRow('Consultation Date', DateFormatter.formatDate(visit.visitDate))),
                     ],
                   ),
-                  pw.SizedBox(height: 6),
+                  pw.SizedBox(height: 4),
                   pw.Row(
                     children: [
                       pw.Expanded(child: _infoRow('Address', patient.address ?? 'N/A')),
@@ -209,7 +209,7 @@ class DocumentPdfGenerator {
                 ],
               ),
             ),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 12),
 
             // 4. Clinical Details Section
             if ((visit.chiefComplaint != null && visit.chiefComplaint!.trim().isNotEmpty) ||
@@ -217,13 +217,13 @@ class DocumentPdfGenerator {
               _sectionHeader('CLINICAL SYMPTOMS & HISTORY'),
               _clinicalBlock('Chief Complaint', visit.chiefComplaint),
               _clinicalBlock('Past Medical History', visit.pastMedicalHistory),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 6),
             ],
 
             if (visit.history != null && visit.history!.trim().isNotEmpty) ...[
               _sectionHeader('HISTORY OF PRESENT ILLNESS'),
-              pw.Text(visit.history!, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
-              pw.SizedBox(height: 10),
+              pw.Text(visit.history!, style: const pw.TextStyle(fontSize: 8.5), textAlign: pw.TextAlign.justify),
+              pw.SizedBox(height: 6),
             ],
 
             // 5. Vitals Section
@@ -232,7 +232,7 @@ class DocumentPdfGenerator {
                 VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false).isNotEmpty ||
                 VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isNotEmpty) ...[
               _sectionHeader('VITAL SIGNS & MEASUREMENTS'),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 4),
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                 children: [
@@ -255,7 +255,7 @@ class DocumentPdfGenerator {
                   ),
                 ],
               ),
-              pw.SizedBox(height: 15),
+              pw.SizedBox(height: 10),
             ],
 
             // 6. Examination & Investigations
@@ -264,7 +264,7 @@ class DocumentPdfGenerator {
               _sectionHeader('EXAMINATION & INVESTIGATIONS'),
               _clinicalBlock('Systemic Examination', visit.systemicExamination),
               _clinicalBlock('Investigations Ordered', visit.investigations),
-              pw.SizedBox(height: 15),
+              pw.SizedBox(height: 10),
             ],
 
             // 7. Diagnosis & Plan
@@ -272,18 +272,18 @@ class DocumentPdfGenerator {
               _sectionHeader('DIAGNOSIS'),
               pw.Text(
                 visit.diagnoses!.map((d) => d.icdCode == 'Custom' ? d.diagnosisName : '${d.icdCode} - ${d.diagnosisName}').join('\n'),
-                style: const pw.TextStyle(fontSize: 9.5),
+                style: const pw.TextStyle(fontSize: 8.5),
                 textAlign: pw.TextAlign.justify,
               ),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 6),
             ] else if (visit.diagnosis != null && visit.diagnosis!.isNotEmpty) ...[
               _sectionHeader('DIAGNOSIS'),
               pw.Text(
                 '${visit.diagnosis!}${visit.diagnosisCode != null ? " (ICD-10: ${visit.diagnosisCode})" : ""}',
-                style: const pw.TextStyle(fontSize: 9.5),
+                style: const pw.TextStyle(fontSize: 8.5),
                 textAlign: pw.TextAlign.justify,
               ),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 6),
             ],
 
             ..._buildAdviceAndPrescription(visit.advice),
@@ -295,7 +295,7 @@ class DocumentPdfGenerator {
               _clinicalBlock('Follow-up Date', DateFormatter.formatDate(visit.followupDate)),
             ],
             
-            pw.SizedBox(height: 40),
+            pw.SizedBox(height: 25),
 
             // 8. Sign-off Section (Will automatically wrap cleanly)
             pw.Row(
@@ -313,16 +313,16 @@ class DocumentPdfGenerator {
                   children: [
                     if (sigImage != null) ...[
                       pw.Container(
-                        height: 50,
+                        height: 40,
                         width: 120,
                         child: pw.Image(sigImage, fit: pw.BoxFit.contain),
                       ),
                       pw.SizedBox(height: 4),
                     ] else ...[
-                      pw.SizedBox(height: 50),
+                      pw.SizedBox(height: 40),
                     ],
                     pw.Container(
-                      width: 150,
+                      width: 130,
                       decoration: const pw.BoxDecoration(
                         border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey600, width: 0.8)),
                       ),
@@ -330,14 +330,14 @@ class DocumentPdfGenerator {
                     ),
                     pw.SizedBox(height: 4),
                     if (doctor != null) ...[
-                      pw.Text(doctor.fullName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
-                      pw.Text(doctor.specialization ?? 'General Medicine', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                      pw.Text(doctor.fullName, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                      pw.Text(doctor.specialization ?? 'General Medicine', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800)),
                       if (doctor.licenseNumber != null)
-                        pw.Text('License No: ${doctor.licenseNumber!}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                        pw.Text('License No: ${doctor.licenseNumber!}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800)),
                     ] else ...[
-                      pw.Text('Doctor\'s Authorized Signature', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
+                      pw.Text('Doctor\'s Authorized Signature', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800)),
                       if (doctorName != null)
-                        pw.Text(doctorName, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                        pw.Text(doctorName, style: pw.TextStyle(fontSize: 7.5, color: PdfColors.grey600)),
                     ],
                   ],
                 ),
@@ -733,13 +733,13 @@ class DocumentPdfGenerator {
     return [
       if (adviceText != null && adviceText.isNotEmpty) ...[
         _sectionHeader('ADVICE'),
-        pw.Text(adviceText, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
-        pw.SizedBox(height: 10),
+        pw.Text(adviceText, style: const pw.TextStyle(fontSize: 8.5), textAlign: pw.TextAlign.justify),
+        pw.SizedBox(height: 6),
       ],
       if (prescriptionText != null && prescriptionText.isNotEmpty) ...[
         _sectionHeader('PRESCRIPTION'),
-        pw.Text(prescriptionText, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
-        pw.SizedBox(height: 10),
+        pw.Text(prescriptionText, style: const pw.TextStyle(fontSize: 8.5), textAlign: pw.TextAlign.justify),
+        pw.SizedBox(height: 6),
       ],
     ];
   }
@@ -748,8 +748,8 @@ class DocumentPdfGenerator {
     return pw.RichText(
       text: pw.TextSpan(
         children: [
-          pw.TextSpan(text: '$label: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.teal900)),
-          pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey900)),
+          pw.TextSpan(text: '$label: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5, color: PdfColors.teal900)),
+          pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey900)),
         ],
       ),
     );
@@ -758,14 +758,14 @@ class DocumentPdfGenerator {
   static pw.Widget _sectionHeader(String title) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-      margin: const pw.EdgeInsets.only(bottom: 6, top: 12),
+      padding: const pw.EdgeInsets.symmetric(vertical: 2.5, horizontal: 5),
+      margin: const pw.EdgeInsets.only(bottom: 4, top: 8),
       decoration: const pw.BoxDecoration(
         color: PdfColors.teal700,
       ),
       child: pw.Text(
         title,
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
+        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
       ),
     );
   }
@@ -773,13 +773,13 @@ class DocumentPdfGenerator {
   static pw.Widget _clinicalBlock(String label, String? content) {
     if (content == null || content.trim().isEmpty) return pw.SizedBox.shrink();
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(top: 6, bottom: 4),
+      padding: const pw.EdgeInsets.only(top: 4, bottom: 2),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text('$label:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.teal800, fontSize: 9.5)),
-          pw.SizedBox(height: 2),
-          pw.Text(content, style: const pw.TextStyle(fontSize: 9.5), textAlign: pw.TextAlign.justify),
+          pw.Text('$label:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.teal800, fontSize: 8.5)),
+          pw.SizedBox(height: 1),
+          pw.Text(content, style: const pw.TextStyle(fontSize: 8.5), textAlign: pw.TextAlign.justify),
         ],
       ),
     );
@@ -787,10 +787,10 @@ class DocumentPdfGenerator {
 
   static pw.Widget _tableHeaderCell(String text) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(5),
+      padding: const pw.EdgeInsets.all(4),
       child: pw.Text(
         text,
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.grey800),
+        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8, color: PdfColors.grey800),
         textAlign: pw.TextAlign.center,
       ),
     );
@@ -798,10 +798,10 @@ class DocumentPdfGenerator {
 
   static pw.Widget _tableCell(String text) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(5),
+      padding: const pw.EdgeInsets.all(4),
       child: pw.Text(
         text,
-        style: const pw.TextStyle(fontSize: 9),
+        style: const pw.TextStyle(fontSize: 8),
         textAlign: pw.TextAlign.center,
       ),
     );

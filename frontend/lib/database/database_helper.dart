@@ -86,16 +86,7 @@ class DatabaseHelper {
     final appDirPath = await getAppDirectoryPath();
     final path = join(appDirPath, filePath);
 
-    // Auto-migrate database from old temporary location if present
-    try {
-      final oldDbPath = await getDatabasesPath();
-      final oldPath = join(oldDbPath, filePath);
-      final oldFile = File(oldPath);
-      final newFile = File(path);
-      if (await oldFile.exists() && !await newFile.exists()) {
-        await oldFile.copy(path);
-      }
-    } catch (_) {}
+
 
     return await openDatabase(
       path,
@@ -1884,6 +1875,9 @@ class DatabaseHelper {
     await db.execute('PRAGMA foreign_keys = OFF;');
     await db.execute('DROP TABLE IF EXISTS "documents";');
     await db.execute('DROP TABLE IF EXISTS "settings";');
+    await db.execute('DROP TABLE IF EXISTS "investigation_measurements";');
+    await db.execute('DROP TABLE IF EXISTS "investigation_diagnoses";');
+    await db.execute('DROP TABLE IF EXISTS "consultation_diagnoses";');
     await db.execute('DROP TABLE IF EXISTS "investigation_reports";');
     await db.execute('DROP TABLE IF EXISTS "sync_queue";');
     await db.execute('DROP TABLE IF EXISTS "audit_logs";');
