@@ -1457,24 +1457,25 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                                   icon: const Icon(Icons.calendar_today, color: Colors.teal),
                                   tooltip: 'Pick Date from Calendar',
                                   onPressed: () async {
-                                  final currentParsed = _parseFollowupInput(_followupDateController.text);
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: (currentParsed != null && !currentParsed.isBefore(DateTime.now()))
-                                        ? currentParsed
-                                        : DateTime.now().add(const Duration(days: 7)),
-                                    firstDate: DateTime.now(),
-                                    lastDate: DateTime.now().add(const Duration(days: 730)),
-                                  );
-                                  if (picked != null) {
-                                    setState(() {
-                                      _followupDateController.text =
-                                          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-                                    });
-                                  }
-                                },
-                              ),
-                            ],
+                                    final currentParsed = _parseFollowupInput(_followupDateController.text);
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: (currentParsed != null && !currentParsed.isBefore(DateTime.now()))
+                                          ? currentParsed
+                                          : DateTime.now().add(const Duration(days: 7)),
+                                      firstDate: DateTime.now(),
+                                      lastDate: DateTime.now().add(const Duration(days: 730)),
+                                    );
+                                    if (picked != null) {
+                                      setState(() {
+                                        _followupDateController.text =
+                                            "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
                           border: const OutlineInputBorder(),
                           focusedBorder: OutlineInputBorder(
