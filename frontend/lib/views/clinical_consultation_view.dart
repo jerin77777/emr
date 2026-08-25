@@ -858,18 +858,20 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         filled: true,
         fillColor: Colors.grey.shade50,
         suffixIcon: (controller is SpellCheckTextEditingController && fieldName != null)
-            ? IconButton(
-                icon: const Icon(Icons.spellcheck, color: Colors.teal),
-                tooltip: 'Spell Check $fieldName',
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => SpellCheckDialog(
-                      controller: controller,
-                      fieldName: fieldName,
-                    ),
-                  );
-                },
+            ? ExcludeFocus(
+                child: IconButton(
+                  icon: const Icon(Icons.spellcheck, color: Colors.teal),
+                  tooltip: 'Spell Check $fieldName',
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => SpellCheckDialog(
+                        controller: controller,
+                        fieldName: fieldName,
+                      ),
+                    );
+                  },
+                ),
               )
             : null,
       ),
@@ -1317,15 +1319,17 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                                     filled: true,
                                     fillColor: Colors.grey.shade50,
                                     suffixIcon: textEditingController.text.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              setState(() {
-                                                textEditingController.clear();
-                                                _selectedIcdCode = null;
-                                                _selectedIcdName = null;
-                                              });
-                                            },
+                                        ? ExcludeFocus(
+                                            child: IconButton(
+                                              icon: const Icon(Icons.clear),
+                                              onPressed: () {
+                                                setState(() {
+                                                  textEditingController.clear();
+                                                  _selectedIcdCode = null;
+                                                  _selectedIcdName = null;
+                                                });
+                                              },
+                                            ),
                                           )
                                         : null,
                                   ),
@@ -1435,23 +1439,24 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                           labelText: 'Follow-up Duration / Date (Optional)',
                           hintText: 'e.g. 1 day, 2 weeks, 1 month, or select date',
                           prefixIcon: const Icon(Icons.event_repeat),
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_followupDateController.text.isNotEmpty)
+                          suffixIcon: ExcludeFocus(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_followupDateController.text.isNotEmpty)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    tooltip: 'Clear',
+                                    onPressed: () {
+                                      setState(() {
+                                        _followupDateController.clear();
+                                      });
+                                    },
+                                  ),
                                 IconButton(
-                                  icon: const Icon(Icons.clear, size: 18),
-                                  tooltip: 'Clear',
-                                  onPressed: () {
-                                    setState(() {
-                                      _followupDateController.clear();
-                                    });
-                                  },
-                                ),
-                              IconButton(
-                                icon: const Icon(Icons.calendar_today, color: Colors.teal),
-                                tooltip: 'Pick Date from Calendar',
-                                onPressed: () async {
+                                  icon: const Icon(Icons.calendar_today, color: Colors.teal),
+                                  tooltip: 'Pick Date from Calendar',
+                                  onPressed: () async {
                                   final currentParsed = _parseFollowupInput(_followupDateController.text);
                                   final picked = await showDatePicker(
                                     context: context,
