@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/date_formatter.dart';
+import 'billing_view.dart';
 
 class BillingDashboardView extends StatefulWidget {
   final User currentUser;
@@ -680,6 +682,41 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
                               );
                             },
                           ),
+                          Builder(
+                            builder: (context) {
+                              final isEditable = DateFormatter.isBillEditable(bill.billDate);
+                              final editStatus = DateFormatter.getBillEditStatusText(bill.billDate);
+                              return IconButton(
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 20,
+                                  color: isEditable ? Colors.teal : Colors.grey.shade400,
+                                ),
+                                tooltip: isEditable ? 'Edit Invoice ($editStatus)' : 'Edit window closed ($editStatus)',
+                                onPressed: isEditable ? () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (ctx) => BillingView(
+                                        patient: _selectedPatient,
+                                        currentUser: widget.currentUser,
+                                        existingBill: bill,
+                                      ),
+                                    ),
+                                  ).then((res) {
+                                    if (res == true || mounted) {
+                                      if (_selectedPatient != null) _selectPatient(_selectedPatient!);
+                                    }
+                                  });
+                                } : null,
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400),
+                            tooltip: 'Delete Invoice',
+                            onPressed: () => _confirmDeleteBill(bill),
+                          ),
                         ],
                       ),
                     ),
@@ -691,6 +728,61 @@ class _BillingDashboardViewState extends State<BillingDashboardView> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteBill(Bill bill) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Invoice'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Invoice "${bill.billNumber}" for ₹${bill.totalAmount.toStringAsFixed(2)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Invoice'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && bill.id != null) {
+      try {
+        await DatabaseHelper.instance.deleteBill(bill.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invoice ${bill.billNumber} deleted successfully.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          if (_selectedPatient != null) {
+            _selectPatient(_selectedPatient!);
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting invoice: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildInvoiceFormCard() {

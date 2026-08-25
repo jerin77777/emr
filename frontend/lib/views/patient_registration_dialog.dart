@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 
@@ -29,6 +30,9 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
   late TextEditingController _emergencyContactController;
   late TextEditingController _referralDoctorController;
   late TextEditingController _identityNumberController;
+
+  late FocusNode _genderFocusNode;
+  late FocusNode _identityFocusNode;
 
   String _gender = 'Male';
   String _identityType = 'Aadhaar';
@@ -62,6 +66,52 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
       _gender = p!.gender;
     }
 
+    _genderFocusNode = FocusNode(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          final char = event.character?.toLowerCase();
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.keyM || char == 'm') {
+            setState(() => _gender = 'Male');
+            return KeyEventResult.handled;
+          } else if (key == LogicalKeyboardKey.keyF || char == 'f') {
+            setState(() => _gender = 'Female');
+            return KeyEventResult.handled;
+          } else if (key == LogicalKeyboardKey.keyO || char == 'o') {
+            setState(() => _gender = 'Other');
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+    );
+
+    _identityFocusNode = FocusNode(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          final char = event.character?.toLowerCase();
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.keyA || char == 'a') {
+            setState(() => _identityType = 'Aadhaar');
+            return KeyEventResult.handled;
+          } else if (key == LogicalKeyboardKey.keyP || char == 'p') {
+            setState(() => _identityType = 'Passport');
+            return KeyEventResult.handled;
+          } else if (key == LogicalKeyboardKey.keyV || char == 'v') {
+            setState(() => _identityType = 'Voter ID');
+            return KeyEventResult.handled;
+          } else if (key == LogicalKeyboardKey.keyD || char == 'd') {
+            setState(() => _identityType = 'Driving Licence');
+            return KeyEventResult.handled;
+          } else if (key == LogicalKeyboardKey.keyO || char == 'o') {
+            setState(() => _identityType = 'Other');
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+    );
+
     if (p == null) {
       _loadNextPatientCode();
     } else {
@@ -79,6 +129,12 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
         }
         _ageController.text = age.toString();
       }
+    } else if (_dobController.text.isEmpty && _ageController.text.isNotEmpty) {
+      final ageNum = int.tryParse(_ageController.text);
+      if (ageNum != null && ageNum >= 0 && ageNum <= 130) {
+        final approxYear = DateTime.now().year - ageNum;
+        _dobController.text = "$approxYear-01-01";
+      }
     }
   }
 
@@ -93,6 +149,8 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
 
   @override
   void dispose() {
+    _genderFocusNode.dispose();
+    _identityFocusNode.dispose();
     _fullNameController.dispose();
     _dobController.dispose();
     _ageController.dispose();
@@ -153,7 +211,7 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final uuid = widget.existingPatient?.patientUuid ?? 'pat-${DateTime.now().millisecondsSinceEpoch}';
+      final uuid = widget.existingPatient?.patientUuid ?? 'pat-${DateTime.now().microsecondsSinceEpoch}';
       final ageNum = int.tryParse(_ageController.text.trim());
 
       final fullName = _sanitizeInput(_fullNameController.text);
@@ -169,10 +227,16 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
         throw Exception('Required fields (Full Name, Date of Birth, Mobile Number) cannot be blank.');
       }
 
+      var patientCode = _generatedPatientCode.trim();
+      if (patientCode.isEmpty) {
+        patientCode = await DatabaseHelper.instance.generateNextPatientCode();
+        _generatedPatientCode = patientCode;
+      }
+
       final patient = Patient(
         id: widget.existingPatient?.id,
         patientUuid: uuid,
-        patientCode: _generatedPatientCode,
+        patientCode: patientCode,
         fullName: fullName,
         dateOfBirth: dob,
         age: ageNum,
@@ -268,6 +332,8 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
                           Expanded(
                             flex: 1,
                             child: DropdownButtonFormField<String>(
+                              key: ValueKey(_gender),
+                              focusNode: _genderFocusNode,
                               initialValue: _gender,
                               decoration: const InputDecoration(
                                 labelText: 'Gender *',
@@ -311,11 +377,19 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
                                 final ageNum = int.tryParse(v.trim());
                                 if (ageNum != null && ageNum >= 0 && ageNum <= 130) {
                                   final now = DateTime.now();
-                                  final approxYear = now.year - ageNum;
-                                  final approxDob = "$approxYear-01-01";
-                                  if (_dobController.text.isEmpty) {
-                                    _dobController.text = approxDob;
+                                  final targetYear = now.year - ageNum;
+                                  DateTime? parsedDob;
+                                  if (_dobController.text.isNotEmpty) {
+                                    parsedDob = DateTime.tryParse(_dobController.text);
                                   }
+                                  int month = parsedDob?.month ?? 1;
+                                  int day = parsedDob?.day ?? 1;
+                                  if (month == 2 && day == 29) {
+                                    final isLeapYear = (targetYear % 4 == 0 && targetYear % 100 != 0) || (targetYear % 400 == 0);
+                                    if (!isLeapYear) day = 28;
+                                  }
+                                  final formattedDob = "$targetYear-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}";
+                                  _dobController.text = formattedDob;
                                 }
                               },
                               decoration: const InputDecoration(
@@ -409,6 +483,8 @@ class _PatientRegistrationDialogState extends State<PatientRegistrationDialog> {
                           Expanded(
                             flex: 1,
                             child: DropdownButtonFormField<String>(
+                              key: ValueKey(_identityType),
+                              focusNode: _identityFocusNode,
                               initialValue: _identityType,
                               decoration: const InputDecoration(
                                 labelText: 'Identity Type',

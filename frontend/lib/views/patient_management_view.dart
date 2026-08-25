@@ -25,6 +25,7 @@ class _PatientManagementViewState extends State<PatientManagementView> {
   void initState() {
     super.initState();
     _loadPatients();
+    DatabaseHelper.changeNotifier.addListener(_loadPatients);
   }
 
   void _loadPatients() {
@@ -37,6 +38,7 @@ class _PatientManagementViewState extends State<PatientManagementView> {
 
   @override
   void dispose() {
+    DatabaseHelper.changeNotifier.removeListener(_loadPatients);
     _searchController.dispose();
     super.dispose();
   }
@@ -61,6 +63,59 @@ class _PatientManagementViewState extends State<PatientManagementView> {
         ),
       ),
     ).then((_) => _loadPatients());
+  }
+
+  Future<void> _deletePatient(Patient p) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Patient Record'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete "${p.fullName}" (ID: ${p.patientCode})?\n\nThis will permanently remove the patient and all associated consultations, invoices, and medical records.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && p.id != null) {
+      try {
+        await DatabaseHelper.instance.deletePatient(p.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Patient "${p.fullName}" and all associated records deleted.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        _loadPatients();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting patient: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   void _startConsultation(Patient patient) {
@@ -336,25 +391,6 @@ class _PatientManagementViewState extends State<PatientManagementView> {
                                 ),
                                 Row(
                                   children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.edit,
-                                        color: Colors.grey,
-                                      ),
-                                      tooltip: 'Edit Patient Demographics',
-                                      onPressed: () =>
-                                          _showRegistrationDialog(p),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    OutlinedButton.icon(
-                                      onPressed: () => _openPatientDetail(p),
-                                      icon: const Icon(
-                                        Icons.folder_shared,
-                                        size: 18,
-                                      ),
-                                      label: const Text('EMR Record'),
-                                    ),
-                                    const SizedBox(width: 8),
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.teal.shade700,
@@ -375,6 +411,25 @@ class _PatientManagementViewState extends State<PatientManagementView> {
                                       ),
                                       tooltip: 'Generate Bill',
                                       onPressed: () => _generateBill(p),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        color: Colors.grey,
+                                      ),
+                                      tooltip: 'Edit Patient Demographics',
+                                      onPressed: () =>
+                                          _showRegistrationDialog(p),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red.shade400,
+                                      ),
+                                      tooltip: 'Delete Patient Record',
+                                      onPressed: () => _deletePatient(p),
                                     ),
                                   ],
                                 ),

@@ -8,11 +8,13 @@ import '../widgets/spell_check_widgets.dart';
 class ClinicalConsultationView extends StatefulWidget {
   final Patient patient;
   final User currentUser;
+  final PatientVisit? existingVisit;
 
   const ClinicalConsultationView({
     super.key,
     required this.patient,
     required this.currentUser,
+    this.existingVisit,
   });
 
   @override
@@ -41,9 +43,59 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   @override
   void initState() {
     super.initState();
+    if (widget.existingVisit != null) {
+      _loadExistingVisitData(widget.existingVisit!);
+    }
     _loadPreviousVisits();
     _diagnosisController.addListener(_onDiagnosisChanged);
     _initDoctorAssignment();
+  }
+
+  void _loadExistingVisitData(PatientVisit v) {
+    _chiefComplaintController.text = v.chiefComplaint ?? '';
+    _historyController.text = v.history ?? '';
+    _pastHistoryController.text = v.pastMedicalHistory ?? '';
+    _vitalsBpController.text = v.vitalsBp ?? '';
+    _vitalsPulseController.text = v.vitalsPulse ?? '';
+    _vitalsSaturationController.text = v.vitalsSaturation ?? '';
+
+    if (v.vitalsTemp != null && v.vitalsTemp!.isNotEmpty) {
+      if (v.vitalsTemp!.contains('°C') || v.vitalsTemp!.toLowerCase().contains('c')) {
+        _tempUnit = '°C';
+        _vitalsTempController.text = v.vitalsTemp!.replaceAll('°C', '').replaceAll('C', '').replaceAll('°', '').trim();
+      } else {
+        _tempUnit = '°F';
+        _vitalsTempController.text = v.vitalsTemp!.replaceAll('°F', '').replaceAll('F', '').replaceAll('°', '').trim();
+      }
+    }
+
+    _systemicExamController.text = v.systemicExamination ?? '';
+    _investigationsController.text = v.investigations ?? '';
+    _adviceController.text = v.advice ?? '';
+    _referralToController.text = v.referralTo ?? '';
+    _followupDateController.text = v.followupDate ?? '';
+
+    if (v.diagnoses != null && v.diagnoses!.isNotEmpty) {
+      _selectedDiagnoses.clear();
+      _selectedDiagnoses.addAll(v.diagnoses!);
+    } else if (v.id != null) {
+      DatabaseHelper.instance.getDiagnosesForVisit(v.id!).then((diags) {
+        if (mounted && diags.isNotEmpty) {
+          setState(() {
+            _selectedDiagnoses.clear();
+            _selectedDiagnoses.addAll(diags);
+          });
+        } else if (v.diagnosis != null && v.diagnosis!.isNotEmpty) {
+          setState(() {
+            _selectedDiagnoses.clear();
+            _selectedDiagnoses.add(ConsultationDiagnosis(
+              icdCode: v.diagnosisCode ?? 'Custom',
+              diagnosisName: v.diagnosis!,
+            ));
+          });
+        }
+      }).catchError((_) {});
+    }
   }
 
   Future<void> _loadPreviousVisits() async {
@@ -102,17 +154,28 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       }
 
       User? defaultDoc;
-      final currentRoleOfUser = await DatabaseHelper.instance.getRoleByName(widget.currentUser.role);
-      final isCurrentUserDoctor = currentRoleOfUser?.roleKey == 'doctor' || widget.currentUser.role.toLowerCase() == 'doctor';
-      
-      if (isCurrentUserDoctor) {
+      if (widget.existingVisit?.doctorId != null) {
         for (final d in doctors) {
-          if (d.userUuid == widget.currentUser.userUuid) {
+          if (d.id == widget.existingVisit!.doctorId) {
             defaultDoc = d;
             break;
           }
         }
-        defaultDoc ??= widget.currentUser;
+      }
+
+      if (defaultDoc == null) {
+        final currentRoleOfUser = await DatabaseHelper.instance.getRoleByName(widget.currentUser.role);
+        final isCurrentUserDoctor = currentRoleOfUser?.roleKey == 'doctor' || widget.currentUser.role.toLowerCase() == 'doctor';
+        
+        if (isCurrentUserDoctor) {
+          for (final d in doctors) {
+            if (d.userUuid == widget.currentUser.userUuid) {
+              defaultDoc = d;
+              break;
+            }
+          }
+          defaultDoc ??= widget.currentUser;
+        }
       }
 
       if (defaultDoc == null && widget.patient.id != null) {
@@ -357,6 +420,85 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     return null;
   }
 
+  DateTime? _parseFollowupInput(String? input, [DateTime? baseDate]) {
+    if (input == null) return null;
+    final trimmed = input.trim().toLowerCase();
+    if (trimmed.isEmpty) return null;
+
+    final base = baseDate ?? DateTime.now();
+    final today = DateTime(base.year, base.month, base.day);
+
+    if (trimmed == 'tomorrow') {
+      return today.add(const Duration(days: 1));
+    }
+    if (trimmed == 'next week') {
+      return today.add(const Duration(days: 7));
+    }
+    if (trimmed == 'next month') {
+      return DateTime(today.year, today.month + 1, today.day);
+    }
+
+    // Relative durations: e.g. "1 day", "2 days", "3 d", "1 week", "2 w", "2 wks", "1 month", "3 m", "1 year"
+    final regex = RegExp(r'^(\d+)\s*(d|day|days|w|wk|wks|week|weeks|m|mo|mos|mon|month|months|y|yr|yrs|year|years)$');
+    final match = regex.firstMatch(trimmed);
+    if (match != null) {
+      final count = int.tryParse(match.group(1)!);
+      final unit = match.group(2)!;
+      if (count != null && count > 0) {
+        if (unit.startsWith('d')) {
+          return today.add(Duration(days: count));
+        } else if (unit.startsWith('w')) {
+          return today.add(Duration(days: count * 7));
+        } else if (unit.startsWith('m')) {
+          return DateTime(today.year, today.month + count, today.day);
+        } else if (unit.startsWith('y')) {
+          return DateTime(today.year + count, today.month, today.day);
+        }
+      }
+    }
+
+    // Standard date formats: YYYY-MM-DD or YYYY/MM/DD
+    final dateRegex1 = RegExp(r'^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$');
+    final m1 = dateRegex1.firstMatch(trimmed);
+    if (m1 != null) {
+      final y = int.parse(m1.group(1)!);
+      final m = int.parse(m1.group(2)!);
+      final d = int.parse(m1.group(3)!);
+      try {
+        return DateTime(y, m, d);
+      } catch (_) {}
+    }
+
+    // DD-MM-YYYY or DD/MM/YYYY
+    final dateRegex2 = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$');
+    final m2 = dateRegex2.firstMatch(trimmed);
+    if (m2 != null) {
+      final d = int.parse(m2.group(1)!);
+      final m = int.parse(m2.group(2)!);
+      final y = int.parse(m2.group(3)!);
+      try {
+        return DateTime(y, m, d);
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  String? _validateFollowupInput(String? val) {
+    if (val == null || val.trim().isEmpty) {
+      return null;
+    }
+    final parsed = _parseFollowupInput(val);
+    if (parsed == null) {
+      return 'Please enter a valid format like "1 day", "2 weeks", "1 month" or select a date.';
+    }
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    if (parsed.isBefore(today)) {
+      return 'Follow-up date cannot be in the past.';
+    }
+    return null;
+  }
+
   void _showPreviousInvestigationsDialog() {
     showDialog(
       context: context,
@@ -450,7 +592,13 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       vitalsTemp = '$vitalsTemp $_tempUnit';
     }
     final vitalsSat = _sanitizeInput(_vitalsSaturationController.text);
-    final followup = _sanitizeInput(_followupDateController.text);
+    String? followup = _sanitizeInput(_followupDateController.text);
+    if (followup != null) {
+      final parsed = _parseFollowupInput(followup);
+      if (parsed != null) {
+        followup = "${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}";
+      }
+    }
 
     final List<ConsultationDiagnosis> diagnosesToSave = List.from(_selectedDiagnoses);
     if (diag != null && !diagnosesToSave.any((d) => d.diagnosisName == diag)) {
@@ -499,9 +647,60 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         throw Exception('Invalid patient identifier.');
       }
 
+      if (widget.existingVisit != null) {
+        // Enforce same-day midnight + 30 mins buffer edit cutoff
+        if (!DateFormatter.isVisitEditable(widget.existingVisit!.visitDate, widget.existingVisit!.createdAt)) {
+          throw Exception('The editing window for this consultation closed at midnight + 30 mins. Historical records cannot be modified.');
+        }
+
+        final updatedVisit = widget.existingVisit!.copyWith(
+          doctorId: _selectedDoctor?.id,
+          doctorSignatureVersion: _selectedDoctor?.signatureVersion ?? widget.existingVisit!.doctorSignatureVersion,
+          chiefComplaint: chief,
+          history: history,
+          pastMedicalHistory: past,
+          vitalsBp: vitalsBp,
+          vitalsPulse: vitalsPulse,
+          vitalsTemp: vitalsTemp,
+          vitalsSaturation: vitalsSat,
+          systemicExamination: sysExam,
+          investigations: inv,
+          diagnosis: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.diagnosisName : null,
+          diagnosisCode: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.icdCode : null,
+          advice: advice,
+          referralTo: referral,
+          followupDate: followup,
+          diagnoses: diagnosesToSave,
+          syncStatus: 'pending',
+        );
+
+        if (_selectedDoctor != null) {
+          await DatabaseHelper.instance.saveSetting(
+            'last_selected_doctor_${widget.currentUser.userUuid}',
+            _selectedDoctor!.userUuid,
+          );
+        }
+
+        final updatedRows = await DatabaseHelper.instance.updatePatientVisit(updatedVisit);
+        if (updatedRows <= 0) {
+          throw Exception('Failed to update consultation in database.');
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Consultation Visit #${widget.existingVisit!.visitNumber ?? ""} updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+        return;
+      }
+
       final existingVisits = await DatabaseHelper.instance.getVisitsForPatient(widget.patient.id!);
       final nextVisitNumber = existingVisits.length + 1;
-      final visitUuid = 'vst-${DateTime.now().millisecondsSinceEpoch}';
+      final visitUuid = 'vst-${DateTime.now().microsecondsSinceEpoch}';
 
       final visit = PatientVisit(
         visitUuid: visitUuid,
@@ -548,7 +747,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -594,7 +793,12 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       diagnosisCode: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.icdCode : null,
       advice: _sanitizeInput(_adviceController.text),
       referralTo: _sanitizeInput(_referralToController.text),
-      followupDate: _sanitizeInput(_followupDateController.text),
+      followupDate: () {
+        final f = _sanitizeInput(_followupDateController.text);
+        if (f == null) return null;
+        final p = _parseFollowupInput(f);
+        return p != null ? "${p.year}-${p.month.toString().padLeft(2, '0')}-${p.day.toString().padLeft(2, '0')}" : f;
+      }(),
       visitDate: DateTime.now().toString().split(' ')[0],
       diagnoses: diagnosesToSave,
     );
@@ -673,17 +877,76 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     );
   }
 
+  Future<void> _confirmDeleteCurrentVisit() async {
+    if (widget.existingVisit == null || widget.existingVisit!.id == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Consultation Visit'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Consultation Visit #${widget.existingVisit!.visitNumber ?? ""} (${DateFormatter.formatDate(widget.existingVisit!.visitDate)})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Visit'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await DatabaseHelper.instance.deletePatientVisit(widget.existingVisit!.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Consultation Visit #${widget.existingVisit!.visitNumber ?? ""} deleted successfully.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting consultation: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.patient;
+    final isEdit = widget.existingVisit != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Clinical Consultation - ${p.fullName} (ID: ${p.patientCode})'),
+        title: Text(
+          isEdit
+              ? 'Edit Consultation - Visit #${widget.existingVisit!.visitNumber ?? ""} (${p.fullName})'
+              : 'Clinical Consultation - ${p.fullName} (ID: ${p.patientCode})',
+        ),
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
-          if (_hasPreviousVisits) ...[
+          if (_hasPreviousVisits && !isEdit) ...[
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
@@ -717,8 +980,19 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
             icon: _isSaving
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.check_circle),
-            label: const Text('SAVE CONSULTATION', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(
+              isEdit ? 'UPDATE CONSULTATION' : 'SAVE CONSULTATION',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
+          if (isEdit) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.white70),
+              tooltip: 'Delete Consultation',
+              onPressed: _confirmDeleteCurrentVisit,
+            ),
+          ],
           const SizedBox(width: 16),
         ],
       ),
@@ -737,6 +1011,39 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (isEdit) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_calendar, color: Colors.amber.shade900, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Editing Consultation Visit #${widget.existingVisit!.visitNumber ?? ""}',
+                                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${DateFormatter.getEditStatusText(widget.existingVisit!.visitDate, widget.existingVisit!.createdAt)} (Editable within midnight + 30m buffer).',
+                                      style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       Text(
                         'Clinical Details',
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -1120,32 +1427,161 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                         fieldName: 'Referral',
                       ),
 
-                      const SizedBox(height: 16),
+                      // j. Follow-up
+                      _buildSectionHeader('Follow-up', Icons.calendar_month),
                       TextFormField(
                         controller: _followupDateController,
-                        readOnly: true,
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: DateTime.now().add(const Duration(days: 7)),
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                        decoration: InputDecoration(
+                          labelText: 'Follow-up Duration / Date (Optional)',
+                          hintText: 'e.g. 1 day, 2 weeks, 1 month, or select date',
+                          prefixIcon: const Icon(Icons.event_repeat),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_followupDateController.text.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  tooltip: 'Clear',
+                                  onPressed: () {
+                                    setState(() {
+                                      _followupDateController.clear();
+                                    });
+                                  },
+                                ),
+                              IconButton(
+                                icon: const Icon(Icons.calendar_today, color: Colors.teal),
+                                tooltip: 'Pick Date from Calendar',
+                                onPressed: () async {
+                                  final currentParsed = _parseFollowupInput(_followupDateController.text);
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: (currentParsed != null && !currentParsed.isBefore(DateTime.now()))
+                                        ? currentParsed
+                                        : DateTime.now().add(const Duration(days: 7)),
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                                  );
+                                  if (picked != null) {
+                                    setState(() {
+                                      _followupDateController.text =
+                                          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                          border: const OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Colors.teal.shade700, width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        validator: _validateFollowupInput,
+                      ),
+
+                      // Live Date Preview
+                      Builder(
+                        builder: (context) {
+                          final parsedDate = _parseFollowupInput(_followupDateController.text);
+                          if (parsedDate == null) return const SizedBox.shrink();
+
+                          final now = DateTime.now();
+                          final today = DateTime(now.year, now.month, now.day);
+                          final daysFromNow = parsedDate.difference(today).inDays;
+                          final formattedDate = DateFormatter.formatDate(parsedDate.toIso8601String());
+                          final weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                          final weekday = weekdayNames[parsedDate.weekday - 1];
+
+                          return Container(
+                            margin: const EdgeInsets.only(top: 8, bottom: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.teal.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.event_available, color: Colors.teal.shade800, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: TextStyle(color: Colors.teal.shade900, fontSize: 13),
+                                      children: [
+                                        const TextSpan(text: 'Calculated Date: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                                        TextSpan(
+                                          text: '$formattedDate ($weekday)',
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        if (daysFromNow > 0)
+                                          TextSpan(
+                                            text: ' • in $daysFromNow day${daysFromNow == 1 ? "" : "s"}',
+                                            style: TextStyle(color: Colors.teal.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                                          )
+                                        else if (daysFromNow == 0)
+                                          TextSpan(
+                                            text: ' • Today',
+                                            style: TextStyle(color: Colors.teal.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           );
-                          if (picked != null) {
-                            setState(() {
-                              _followupDateController.text =
-                                  "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-                            });
-                          }
                         },
-                        decoration: const InputDecoration(
-                          labelText: 'Follow-up Date (Optional)',
-                          prefixIcon: Icon(Icons.calendar_month),
-                          suffixIcon: Icon(Icons.arrow_drop_down),
-                          border: OutlineInputBorder(),
+                      ),
+
+                      // Quick Duration Suggestions
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6.0, bottom: 16.0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Quick presets:',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                            ),
+                            ...[
+                              '3 days',
+                              '5 days',
+                              '1 week',
+                              '2 weeks',
+                              '1 month',
+                              '3 months',
+                              '6 months',
+                            ].map((preset) {
+                              final isSelected = _followupDateController.text.trim().toLowerCase() == preset;
+                              return ActionChip(
+                                label: Text(preset),
+                                labelStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isSelected ? Colors.teal.shade900 : Colors.black87,
+                                ),
+                                backgroundColor: isSelected ? Colors.teal.shade100 : Colors.grey.shade100,
+                                side: BorderSide(
+                                  color: isSelected ? Colors.teal.shade400 : Colors.grey.shade300,
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                onPressed: () {
+                                  setState(() {
+                                    _followupDateController.text = preset;
+                                  });
+                                },
+                              );
+                            }),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 8),
 
                       Row(
                         children: [

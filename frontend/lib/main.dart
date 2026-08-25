@@ -1312,11 +1312,13 @@ class _UserManagementTabState extends State<UserManagementTab> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                        tooltip: 'Edit User',
                         onPressed: () => _showUserForm(user),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        tooltip: 'Delete User',
                         onPressed: () => _deleteUser(user),
                       ),
                     ],
@@ -1828,7 +1830,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                   _approvedIsClean = null;
                                 });
                               },
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
                               label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
                             ),
                           ],
@@ -1876,7 +1878,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                                   _existingOrigSigPath = null;
                                 });
                               },
-                              icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 16),
                               label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
                             ),
                           ],
@@ -2074,12 +2076,14 @@ class _RoleManagementTabState extends State<RoleManagementTab> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                        tooltip: 'Edit Role',
                         onPressed: () => _showRoleForm(role),
                       ),
                       if (!role.isSystem)
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          tooltip: 'Delete Role',
                           onPressed: () => _deleteRole(role),
                         ),
                     ],

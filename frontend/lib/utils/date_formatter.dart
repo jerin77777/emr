@@ -97,4 +97,50 @@ class DateFormatter {
     
     return "$displayHourStr:$minStr $amPm";
   }
+
+  /// Returns the cutoff DateTime until which a consultation visit can be edited.
+  /// Allowed within midnight of same date + 30 mins buffer (00:30 next calendar day, or at least 30m after entry).
+  static DateTime? getVisitEditCutoff(String? visitDateStr, [String? createdAtStr]) {
+    if (visitDateStr == null && createdAtStr == null) return null;
+    final dt = parse(visitDateStr) ?? parse(createdAtStr);
+    if (dt == null) return null;
+
+    final midnightCutoff = DateTime(dt.year, dt.month, dt.day + 1, 0, 30);
+    final entryBuffer = dt.add(const Duration(minutes: 30));
+    return midnightCutoff.isAfter(entryBuffer) ? midnightCutoff : entryBuffer;
+  }
+
+  /// Checks if a consultation visit is still within the allowable edit window.
+  static bool isVisitEditable(String? visitDateStr, [String? createdAtStr]) {
+    final cutoff = getVisitEditCutoff(visitDateStr, createdAtStr);
+    if (cutoff == null) return false;
+    return DateTime.now().isBefore(cutoff);
+  }
+
+  /// Returns a human-friendly string for the edit window status.
+  static String getEditStatusText(String? visitDateStr, [String? createdAtStr]) {
+    final cutoff = getVisitEditCutoff(visitDateStr, createdAtStr);
+    if (cutoff == null) return 'Not editable';
+    final now = DateTime.now();
+    if (now.isBefore(cutoff)) {
+      final diff = cutoff.difference(now);
+      if (diff.inHours > 0) {
+        return 'Editable until ${formatTime(cutoff.toIso8601String())} (${diff.inHours}h ${diff.inMinutes % 60}m remaining)';
+      } else {
+        return 'Editable until ${formatTime(cutoff.toIso8601String())} (${diff.inMinutes}m remaining)';
+      }
+    } else {
+      return 'Edit window closed at ${formatTime(cutoff.toIso8601String())}';
+    }
+  }
+
+  /// Checks if a bill is still within the allowable edit window (midnight of same date + 30m buffer).
+  static bool isBillEditable(String? billDateStr) {
+    return isVisitEditable(billDateStr);
+  }
+
+  /// Returns a human-friendly string for the bill edit window status.
+  static String getBillEditStatusText(String? billDateStr) {
+    return getEditStatusText(billDateStr);
+  }
 }

@@ -87,6 +87,60 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
     }
   }
 
+  Future<void> _confirmDeletePatient() async {
+    final p = widget.patient;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Patient Record'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete "${p.fullName}" (ID: ${p.patientCode})?\n\nThis will permanently delete this patient and all their clinical visits, invoices, and documents.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && p.id != null) {
+      try {
+        await DatabaseHelper.instance.deletePatient(p.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Patient "${p.fullName}" deleted successfully.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting patient: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.patient;
@@ -118,7 +172,13 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
             icon: const Icon(Icons.receipt),
             label: const Text('Generate Bill'),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.white70),
+            tooltip: 'Delete Patient Record',
+            onPressed: _confirmDeletePatient,
+          ),
+          const SizedBox(width: 12),
         ],
       ),
       body: Column(
@@ -155,7 +215,9 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
                 BillingTab(
                   billsFuture: _billsFuture,
                   patient: widget.patient,
+                  currentUser: widget.currentUser,
                   onGenerateBill: _generateBill,
+                  onRefresh: _refreshData,
                 ),
                 InvestigationReportsTab(
                   reportsFuture: _reportsFuture,
@@ -365,6 +427,77 @@ class VisitCard extends StatefulWidget {
 class _VisitCardState extends State<VisitCard> {
   bool _expanded = false;
 
+  void _openEditConsultation() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClinicalConsultationView(
+          patient: widget.patient,
+          currentUser: widget.currentUser,
+          existingVisit: widget.visit,
+        ),
+      ),
+    ).then((result) {
+      if (result == true || mounted) {
+        widget.onRefresh();
+      }
+    });
+  }
+
+  Future<void> _confirmDeleteVisit() async {
+    final v = widget.visit;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Consultation Visit'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Consultation Visit #${v.visitNumber ?? widget.index} (${DateFormatter.formatDate(v.visitDate)})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Visit'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && v.id != null) {
+      try {
+        await DatabaseHelper.instance.deletePatientVisit(v.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Consultation Visit #${v.visitNumber ?? widget.index} deleted.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          widget.onRefresh();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting visit: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   void _showPrintPreviewModal() {
     ConsultationPrintPreviewDialog.show(
       context,
@@ -379,6 +512,8 @@ class _VisitCardState extends State<VisitCard> {
   Widget build(BuildContext context) {
     final v = widget.visit;
     final vitalsText = v.formattedVitals(includePlaceholders: true);
+    final isEditable = DateFormatter.isVisitEditable(v.visitDate, v.createdAt);
+    final editStatus = DateFormatter.getEditStatusText(v.visitDate, v.createdAt);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -434,6 +569,21 @@ class _VisitCardState extends State<VisitCard> {
                   tooltip: 'Preview / Print Record',
                   onPressed: _showPrintPreviewModal,
                 ),
+                IconButton(
+                  icon: Icon(
+                    Icons.edit_outlined,
+                    color: isEditable ? Colors.teal.shade700 : Colors.grey.shade400,
+                  ),
+                  tooltip: isEditable
+                      ? 'Edit Consultation ($editStatus)'
+                      : 'Edit window closed ($editStatus)',
+                  onPressed: isEditable ? _openEditConsultation : null,
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                  tooltip: 'Delete Visit',
+                  onPressed: _confirmDeleteVisit,
+                ),
                 Icon(_expanded ? Icons.expand_less : Icons.expand_more),
               ],
             ),
@@ -472,6 +622,23 @@ class _VisitCardState extends State<VisitCard> {
                     ClinicalSectionItem(title: 'Referral', content: v.referralTo!),
                   if (v.followupDate != null && v.followupDate!.isNotEmpty)
                     ClinicalSectionItem(title: 'Follow-up Date', content: DateFormatter.formatDate(v.followupDate!)),
+                  if (isEditable) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _openEditConsultation,
+                          icon: const Icon(Icons.edit_outlined, size: 16),
+                          label: Text('Edit Consultation ($editStatus)'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.teal.shade800,
+                            side: BorderSide(color: Colors.teal.shade300),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -727,14 +894,71 @@ class VitalsPreviewBlock extends StatelessWidget {
 class BillingTab extends StatelessWidget {
   final Future<List<Bill>> billsFuture;
   final Patient patient;
+  final User currentUser;
   final VoidCallback onGenerateBill;
+  final VoidCallback onRefresh;
 
   const BillingTab({
     super.key,
     required this.billsFuture,
     required this.patient,
+    required this.currentUser,
     required this.onGenerateBill,
+    required this.onRefresh,
   });
+
+  Future<void> _confirmDeleteBill(BuildContext context, Bill bill) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Invoice'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Invoice "${bill.billNumber}" for ₹${bill.totalAmount.toStringAsFixed(2)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Invoice'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && bill.id != null) {
+      try {
+        await DatabaseHelper.instance.deleteBill(bill.id!);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invoice ${bill.billNumber} deleted.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          onRefresh();
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting invoice: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -811,6 +1035,40 @@ class BillingTab extends StatelessWidget {
                           builder: (ctx) => BillPrintPreviewDialog(bill: bill, patient: patient),
                         );
                       },
+                    ),
+                    Builder(
+                      builder: (context) {
+                        final isEditable = DateFormatter.isBillEditable(bill.billDate);
+                        final editStatus = DateFormatter.getBillEditStatusText(bill.billDate);
+                        return IconButton(
+                          icon: Icon(
+                            Icons.edit_outlined,
+                            color: isEditable ? Colors.teal.shade700 : Colors.grey.shade400,
+                          ),
+                          tooltip: isEditable ? 'Edit Bill ($editStatus)' : 'Edit window closed ($editStatus)',
+                          onPressed: isEditable ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (ctx) => BillingView(
+                                  patient: patient,
+                                  currentUser: currentUser,
+                                  existingBill: bill,
+                                ),
+                              ),
+                            ).then((res) {
+                              if (res == true || context.mounted) {
+                                onRefresh();
+                              }
+                            });
+                          } : null,
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                      tooltip: 'Delete Invoice',
+                      onPressed: () => _confirmDeleteBill(context, bill),
                     ),
                   ],
                 ),

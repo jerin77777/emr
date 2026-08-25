@@ -67,11 +67,18 @@ class BackupService {
     final dbFile = File(join(appDir, 'emr.db'));
     final docsDir = Directory(join(appDir, 'ClinicData', 'documents'));
     final usersDir = Directory(join(appDir, 'ClinicData', 'users'));
+    final reportsDir = Directory(join(appDir, 'investigation_reports'));
 
     // Check if database exists
     if (!await dbFile.exists()) {
       throw Exception('Active database emr.db not found on disk.');
     }
+
+    // Flush any pending WAL pages / transactions to disk before copying
+    try {
+      final db = await DatabaseHelper.instance.database;
+      await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
+    } catch (_) {}
 
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
     final backupFolderName = 'EMR_Backup_${timestamp.split('T')[0]}_${DateTime.now().hour.toString().padLeft(2, '0')}${DateTime.now().minute.toString().padLeft(2, '0')}';
@@ -88,6 +95,7 @@ class BackupService {
     final tempDbDir = Directory(join(tempDirPath, 'database'));
     final tempDocsDir = Directory(join(tempDirPath, 'documents'));
     final tempUsersDir = Directory(join(tempDirPath, 'users'));
+    final tempReportsDir = Directory(join(tempDirPath, 'investigation_reports'));
     await tempDbDir.create();
     await tempDocsDir.create();
     await tempUsersDir.create();
@@ -105,6 +113,12 @@ class BackupService {
       // Copy users (signatures) recursively
       if (await usersDir.exists()) {
         await _copyDirectory(usersDir, tempUsersDir);
+      }
+
+      // Copy investigation reports recursively if present
+      if (await reportsDir.exists()) {
+        await tempReportsDir.create();
+        await _copyDirectory(reportsDir, tempReportsDir);
       }
 
       // 5. Open backup database to count records and verify integrity
@@ -205,10 +219,12 @@ class BackupService {
     final activeDbFile = File(join(appDir, 'emr.db'));
     final activeDocsDir = Directory(join(appDir, 'ClinicData', 'documents'));
     final activeUsersDir = Directory(join(appDir, 'ClinicData', 'users'));
+    final activeReportsDir = Directory(join(appDir, 'investigation_reports'));
 
     final backupDbFile = File(join(backupPath, 'database', 'emr.db'));
     final backupDocsDir = Directory(join(backupPath, 'documents'));
     final backupUsersDir = Directory(join(backupPath, 'users'));
+    final backupReportsDir = Directory(join(backupPath, 'investigation_reports'));
 
     // Validate first
     await validateBackup(backupPath);
@@ -222,6 +238,7 @@ class BackupService {
     final safetyDbDir = Directory(join(safetyBackupPath, 'database'));
     final safetyDocsDir = Directory(join(safetyBackupPath, 'documents'));
     final safetyUsersDir = Directory(join(safetyBackupPath, 'users'));
+    final safetyReportsDir = Directory(join(safetyBackupPath, 'investigation_reports'));
     await safetyDbDir.create();
     await safetyDocsDir.create();
     await safetyUsersDir.create();
@@ -235,6 +252,10 @@ class BackupService {
       }
       if (await activeUsersDir.exists()) {
         await _copyDirectory(activeUsersDir, safetyUsersDir);
+      }
+      if (await activeReportsDir.exists()) {
+        await safetyReportsDir.create();
+        await _copyDirectory(activeReportsDir, safetyReportsDir);
       }
     } catch (e) {
       throw Exception('Failed to create safety backup: $e. Restore aborted.');
@@ -255,6 +276,9 @@ class BackupService {
       if (await activeUsersDir.exists()) {
         await activeUsersDir.delete(recursive: true);
       }
+      if (await activeReportsDir.exists()) {
+        await activeReportsDir.delete(recursive: true);
+      }
 
       // Copy database from backup to active
       await backupDbFile.copy(activeDbFile.path);
@@ -271,8 +295,17 @@ class BackupService {
         await _copyDirectory(backupUsersDir, activeUsersDir);
       }
 
+      // Copy investigation reports from backup to active if present
+      if (await backupReportsDir.exists()) {
+        await activeReportsDir.create(recursive: true);
+        await _copyDirectory(backupReportsDir, activeReportsDir);
+      }
+
       // Reopen database and verify
       await DatabaseHelper.instance.reopenDatabase();
+
+      // Notify all UI listeners to refresh data
+      DatabaseHelper.notifyDatabaseChanged();
 
       // Cleanup safety backup on absolute success
       if (await safetyDir.exists()) {
@@ -293,6 +326,9 @@ class BackupService {
         if (await activeUsersDir.exists()) {
           await activeUsersDir.delete(recursive: true);
         }
+        if (await activeReportsDir.exists()) {
+          await activeReportsDir.delete(recursive: true);
+        }
 
         final safetyDbFile = File(join(safetyDbDir.path, 'emr.db'));
         if (await safetyDbFile.exists()) {
@@ -306,8 +342,13 @@ class BackupService {
           await activeUsersDir.create(recursive: true);
           await _copyDirectory(safetyUsersDir, activeUsersDir);
         }
+        if (await safetyReportsDir.exists()) {
+          await activeReportsDir.create(recursive: true);
+          await _copyDirectory(safetyReportsDir, activeReportsDir);
+        }
 
         await DatabaseHelper.instance.reopenDatabase();
+        DatabaseHelper.notifyDatabaseChanged();
       } catch (rollbackErr) {
         debugPrint('CRITICAL: Rollback failed! EMR state may be corrupted: $rollbackErr');
       }

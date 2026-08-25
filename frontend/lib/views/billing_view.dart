@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/date_formatter.dart';
 
 class BillingView extends StatefulWidget {
   final Patient? patient;
   final User currentUser;
+  final Bill? existingBill;
 
   const BillingView({
     super.key,
     this.patient,
     required this.currentUser,
+    this.existingBill,
   });
 
   @override
@@ -45,9 +48,44 @@ class _BillingViewState extends State<BillingView> {
   void initState() {
     super.initState();
     _selectedPatient = widget.patient;
-    _loadBillNumber();
+    if (widget.existingBill != null) {
+      _loadExistingBillData(widget.existingBill!);
+    } else {
+      _loadBillNumber();
+    }
     if (_selectedPatient == null) {
       _fetchPatients();
+    }
+  }
+
+  void _loadExistingBillData(Bill b) async {
+    _billNumber = b.billNumber;
+    _consultationController.text = (b.consultationCharges ?? 500.0).toStringAsFixed(2);
+    _procedureController.text = (b.procedureCharges ?? 0.0).toStringAsFixed(2);
+    _additionalController.text = (b.additionalCharges ?? 0.0).toStringAsFixed(2);
+    _discountController.text = (b.discountAmount ?? 0.0).toStringAsFixed(2);
+    _paymentStatus = b.paymentStatus ?? 'Paid';
+    _paymentMethod = b.paymentMethod ?? 'UPI';
+
+    if (b.patientId != 0 && _selectedPatient == null) {
+      final p = await DatabaseHelper.instance.getPatientById(b.patientId);
+      if (mounted && p != null) {
+        setState(() => _selectedPatient = p);
+      }
+    }
+
+    if (b.id != null) {
+      try {
+        final items = await DatabaseHelper.instance.getBillItemsForBill(b.id!);
+        if (mounted && items.isNotEmpty) {
+          setState(() {
+            _lineItems.clear();
+            for (final it in items) {
+              _lineItems.add({'description': it.itemDescription, 'amount': it.amount});
+            }
+          });
+        }
+      } catch (_) {}
     }
   }
 
@@ -102,6 +140,44 @@ class _BillingViewState extends State<BillingView> {
 
     try {
       final total = _calculatedTotal;
+
+      if (widget.existingBill != null) {
+        if (!DateFormatter.isBillEditable(widget.existingBill!.billDate)) {
+          throw Exception('The editing window for this invoice closed at midnight + 30 mins. Historical invoices cannot be modified.');
+        }
+
+        final updatedBill = widget.existingBill!.copyWith(
+          patientId: _selectedPatient!.id!,
+          consultationCharges: _consultationAmount,
+          procedureCharges: _procedureAmount,
+          additionalCharges: _additionalAmount,
+          discountAmount: _discountAmount,
+          totalAmount: total,
+          paidAmount: _paymentStatus == 'Paid' ? total : 0.0,
+          paymentStatus: _paymentStatus,
+          paymentMethod: _paymentMethod,
+          syncStatus: 'pending',
+        );
+
+        final itemsToSave = _lineItems
+            .map((e) => BillItem(
+                  billId: widget.existingBill!.id!,
+                  itemDescription: e['description'],
+                  amount: e['amount'],
+                ))
+            .toList();
+
+        await DatabaseHelper.instance.updateBill(updatedBill, itemsToSave);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Invoice ${widget.existingBill!.billNumber} updated successfully!'), backgroundColor: Colors.green),
+          );
+          Navigator.pop(context, true);
+        }
+        return;
+      }
+
       final bill = Bill(
         billNumber: _billNumber,
         patientId: _selectedPatient!.id!,
@@ -133,7 +209,7 @@ class _BillingViewState extends State<BillingView> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Invoice $_billNumber generated successfully!')),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
         showDialog(
           context: context,
           builder: (ctx) => BillPrintPreviewDialog(
@@ -154,11 +230,67 @@ class _BillingViewState extends State<BillingView> {
     }
   }
 
+  Future<void> _confirmDeleteCurrentBill() async {
+    if (widget.existingBill == null || widget.existingBill!.id == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('Delete Invoice'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete Invoice "${widget.existingBill!.billNumber}" for ₹${widget.existingBill!.totalAmount.toStringAsFixed(2)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Invoice'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await DatabaseHelper.instance.deleteBill(widget.existingBill!.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invoice ${widget.existingBill!.billNumber} deleted successfully.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting invoice: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isEdit = widget.existingBill != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Generate Patient Invoice & Billing'),
+        title: Text(isEdit ? 'Edit Patient Invoice ($_billNumber)' : 'Generate Patient Invoice & Billing'),
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
         actions: [
@@ -166,6 +298,14 @@ class _BillingViewState extends State<BillingView> {
             label: Text(_billNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
             backgroundColor: Colors.white,
           ),
+          if (isEdit) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.white70),
+              tooltip: 'Delete Invoice',
+              onPressed: _confirmDeleteCurrentBill,
+            ),
+          ],
           const SizedBox(width: 16),
         ],
       ),
@@ -173,9 +313,45 @@ class _BillingViewState extends State<BillingView> {
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (isEdit) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_calendar, color: Colors.amber.shade900, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Editing Invoice ${widget.existingBill!.billNumber}',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900, fontSize: 13),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${DateFormatter.getBillEditStatusText(widget.existingBill!.billDate)} (Editable within midnight + 30m buffer).',
+                              style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               // Left Column: Patient Selection & Charges
               Expanded(
                 flex: 3,
@@ -358,13 +534,18 @@ class _BillingViewState extends State<BillingView> {
                         onPressed: _isSaving ? null : _saveBill,
                         icon: _isSaving
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.print),
-                        label: const Text('GENERATE & SAVE BILL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            : Icon(isEdit ? Icons.check_circle : Icons.print),
+                        label: Text(
+                          isEdit ? 'UPDATE INVOICE' : 'GENERATE & SAVE BILL',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
             ],
           ),
         ),

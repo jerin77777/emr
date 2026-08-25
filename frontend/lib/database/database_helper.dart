@@ -1142,7 +1142,26 @@ class DatabaseHelper {
       }
     }
     final db = await instance.database;
-    final result = await db.insert('patients', patient.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    var patientToInsert = patient;
+    if (patient.id == null) {
+      var code = patient.patientCode.trim();
+      if (code.isEmpty) {
+        code = await generateNextPatientCode();
+        patientToInsert = patient.copyWith(patientCode: code);
+      } else {
+        final existing = await db.query(
+          'patients',
+          columns: ['id'],
+          where: 'patient_code = ?',
+          whereArgs: [code],
+        );
+        if (existing.isNotEmpty) {
+          code = await generateNextPatientCode();
+          patientToInsert = patient.copyWith(patientCode: code);
+        }
+      }
+    }
+    final result = await db.insert('patients', patientToInsert.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
     notifyDatabaseChanged();
     return result;
   }
@@ -1170,6 +1189,22 @@ class DatabaseHelper {
 
   Future<int> deletePatient(int id) async {
     final db = await instance.database;
+    // Clean up associated records
+    final visits = await db.query('patient_visits', columns: ['id'], where: 'patient_id = ?', whereArgs: [id]);
+    for (final v in visits) {
+      final vId = v['id'] as int;
+      await db.delete('consultation_diagnoses', where: 'visit_id = ?', whereArgs: [vId]);
+    }
+    await db.delete('patient_visits', where: 'patient_id = ?', whereArgs: [id]);
+
+    final bills = await db.query('bills', columns: ['id'], where: 'patient_id = ?', whereArgs: [id]);
+    for (final b in bills) {
+      final bId = b['id'] as int;
+      await db.delete('bill_items', where: 'bill_id = ?', whereArgs: [bId]);
+    }
+    await db.delete('bills', where: 'patient_id = ?', whereArgs: [id]);
+
+    await db.delete('investigation_reports', where: 'patient_id = ?', whereArgs: [id]);
     final result = await db.delete('patients', where: 'id = ?', whereArgs: [id]);
     notifyDatabaseChanged();
     return result;
@@ -1238,11 +1273,14 @@ class DatabaseHelper {
         });
       }
     }
+    notifyDatabaseChanged();
     return rows;
   }
 
   Future<int> deletePatientVisit(int id) async {
     final db = await instance.database;
+    await db.delete('consultation_diagnoses', where: 'visit_id = ?', whereArgs: [id]);
+    await db.update('bills', {'visit_id': null}, where: 'visit_id = ?', whereArgs: [id]);
     final result = await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
     notifyDatabaseChanged();
     return result;
@@ -1286,13 +1324,22 @@ class DatabaseHelper {
     }
   }
 
-  Future<int> updateBill(Bill bill) async {
+  Future<int> updateBill(Bill bill, [List<BillItem>? items]) async {
     final db = await instance.database;
-    return await db.update('bills', bill.toMap(), where: 'id = ?', whereArgs: [bill.id]);
+    final rows = await db.update('bills', bill.toMap(), where: 'id = ?', whereArgs: [bill.id]);
+    if (items != null && bill.id != null) {
+      await db.delete('bill_items', where: 'bill_id = ?', whereArgs: [bill.id]);
+      for (final item in items) {
+        await db.insert('bill_items', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    }
+    notifyDatabaseChanged();
+    return rows;
   }
 
   Future<int> deleteBill(int id) async {
     final db = await instance.database;
+    await db.delete('bill_items', where: 'bill_id = ?', whereArgs: [id]);
     final result = await db.delete('bills', where: 'id = ?', whereArgs: [id]);
     notifyDatabaseChanged();
     return result;
@@ -1609,20 +1656,44 @@ class DatabaseHelper {
 
   Future<String> generateNextPatientCode() async {
     final db = await instance.database;
-    final result = await db.rawQuery('SELECT MAX(id) as max_id FROM patients');
-    final maxId = (result.first['max_id'] as num?)?.toInt() ?? 0;
-    final nextId = maxId + 1;
     final year = DateTime.now().year;
-    return '$year${nextId.toString().padLeft(4, '0')}';
+    final result = await db.rawQuery('SELECT MAX(id) as max_id FROM patients');
+    int candidateNum = ((result.first['max_id'] as num?)?.toInt() ?? 0) + 1;
+
+    while (true) {
+      final candidateCode = '$year${candidateNum.toString().padLeft(4, '0')}';
+      final existing = await db.query(
+        'patients',
+        columns: ['id'],
+        where: 'patient_code = ?',
+        whereArgs: [candidateCode],
+      );
+      if (existing.isEmpty) {
+        return candidateCode;
+      }
+      candidateNum++;
+    }
   }
 
   Future<String> generateNextBillNumber() async {
     final db = await instance.database;
-    final result = await db.rawQuery('SELECT MAX(id) as max_id FROM bills');
-    final maxId = (result.first['max_id'] as num?)?.toInt() ?? 0;
-    final nextId = maxId + 1;
     final year = DateTime.now().year;
-    return 'INV-$year-${nextId.toString().padLeft(4, '0')}';
+    final result = await db.rawQuery('SELECT MAX(id) as max_id FROM bills');
+    int candidateNum = ((result.first['max_id'] as num?)?.toInt() ?? 0) + 1;
+
+    while (true) {
+      final candidateCode = 'INV-$year-${candidateNum.toString().padLeft(4, '0')}';
+      final existing = await db.query(
+        'bills',
+        columns: ['id'],
+        where: 'bill_number = ?',
+        whereArgs: [candidateCode],
+      );
+      if (existing.isEmpty) {
+        return candidateCode;
+      }
+      candidateNum++;
+    }
   }
 
   Future<void> saveSetting(String key, String value) async {
