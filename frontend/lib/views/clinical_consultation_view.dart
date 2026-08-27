@@ -58,6 +58,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     _vitalsBpController.text = v.vitalsBp ?? '';
     _vitalsPulseController.text = v.vitalsPulse ?? '';
     _vitalsSaturationController.text = v.vitalsSaturation ?? '';
+    _vitalsWeightController.text = v.vitalsWeight ?? '';
 
     if (v.vitalsTemp != null && v.vitalsTemp!.isNotEmpty) {
       if (v.vitalsTemp!.contains('°C') || v.vitalsTemp!.toLowerCase().contains('c')) {
@@ -234,6 +235,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   final _vitalsPulseController = TextEditingController();
   final _vitalsTempController = TextEditingController();
   final _vitalsSaturationController = TextEditingController();
+  final _vitalsWeightController = TextEditingController();
 
   final _systemicExamController = SpellCheckTextEditingController();
   final _investigationsController = SpellCheckTextEditingController();
@@ -251,6 +253,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
     _vitalsPulseController.dispose();
     _vitalsTempController.dispose();
     _vitalsSaturationController.dispose();
+    _vitalsWeightController.dispose();
     _systemicExamController.dispose();
     _investigationsController.dispose();
     _diagnosisController.dispose();
@@ -407,6 +410,24 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       final s = int.tryParse(match);
       if (s != null && (s < 30 || s > 100)) {
         return 'Range: 30-100%';
+      }
+    }
+    return null;
+  }
+
+  String? _validateWeight(String? val) {
+    if (val == null || val.trim().isEmpty) return null;
+    final v = val.trim();
+    if (v.length > 20) return 'Max 20 chars';
+    final weightRegex = RegExp(r'^\d+(\.\d+)?(\s*kg)?$', caseSensitive: false);
+    if (!weightRegex.hasMatch(v)) {
+      return 'e.g. 70 or 70 kg';
+    }
+    final match = RegExp(r'\d+(\.\d+)?').stringMatch(v);
+    if (match != null) {
+      final w = double.tryParse(match);
+      if (w != null && (w < 0 || w > 600)) {
+        return 'Invalid range';
       }
     }
     return null;
@@ -592,6 +613,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       vitalsTemp = '$vitalsTemp $_tempUnit';
     }
     final vitalsSat = _sanitizeInput(_vitalsSaturationController.text);
+    final vitalsWeight = _sanitizeInput(_vitalsWeightController.text);
     String? followup = _sanitizeInput(_followupDateController.text);
     if (followup != null) {
       final parsed = _parseFollowupInput(followup);
@@ -620,7 +642,8 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         vitalsBp == null &&
         vitalsPulse == null &&
         vitalsTemp == null &&
-        vitalsSat == null) {
+        vitalsSat == null &&
+        vitalsWeight == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter at least one clinical detail or vital sign.'),
@@ -663,6 +686,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
           vitalsPulse: vitalsPulse,
           vitalsTemp: vitalsTemp,
           vitalsSaturation: vitalsSat,
+          vitalsWeight: vitalsWeight,
           systemicExamination: sysExam,
           investigations: inv,
           diagnosis: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.diagnosisName : null,
@@ -715,6 +739,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
         vitalsPulse: vitalsPulse,
         vitalsTemp: vitalsTemp,
         vitalsSaturation: vitalsSat,
+        vitalsWeight: vitalsWeight,
         systemicExamination: sysExam,
         investigations: inv,
         diagnosis: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.diagnosisName : null,
@@ -787,6 +812,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
       vitalsPulse: _sanitizeInput(_vitalsPulseController.text),
       vitalsTemp: tempVal,
       vitalsSaturation: _sanitizeInput(_vitalsSaturationController.text),
+      vitalsWeight: _sanitizeInput(_vitalsWeightController.text),
       systemicExamination: _sanitizeInput(_systemicExamController.text),
       investigations: _sanitizeInput(_investigationsController.text),
       diagnosis: diagnosesToSave.isNotEmpty ? diagnosesToSave.first.diagnosisName : null,
@@ -1196,6 +1222,17 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                               validator: _validateSaturation,
                               decoration: const InputDecoration(
                                 labelText: 'Saturation (e.g. 98%)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _vitalsWeightController,
+                              validator: _validateWeight,
+                              decoration: const InputDecoration(
+                                labelText: 'Weight (e.g. 70 kg)',
                                 border: OutlineInputBorder(),
                               ),
                             ),

@@ -17,6 +17,8 @@ void main() {
     expect(VitalsFormatter.formatTemp('98.6'), '98.6 °F');
     expect(VitalsFormatter.formatTemp('37'), '37 °C');
     expect(VitalsFormatter.formatSaturation('98'), '98%');
+    expect(VitalsFormatter.formatWeight('70'), '70 kg');
+    expect(VitalsFormatter.formatWeight('70 kg'), '70 kg');
   });
 
   test('VitalsFormatter generates placeholders when values are missing', () {
@@ -25,8 +27,9 @@ void main() {
       pulse: '',
       temp: null,
       saturation: '',
+      weight: '',
       includePlaceholders: true,
     );
-    expect(formatted, 'BP: ___ mmHg | Pulse: ___ bpm | Temp: ___ °C/°F | SPO2: ___ %');
+    expect(formatted, 'BP: ___ mmHg | Pulse: ___ bpm | Temp: ___ °C/°F | SPO2: ___ % | Weight: ___ kg');
   });
 }

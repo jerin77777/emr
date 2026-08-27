@@ -75,6 +75,8 @@ class User {
   final String fullName;
   final String? specialization;
   final String? licenseNumber;
+  final String? degree;
+  final String? designation;
   final String? phone;
   final String? email;
   final String role;
@@ -93,6 +95,8 @@ class User {
     required this.fullName,
     this.specialization,
     this.licenseNumber,
+    this.degree,
+    this.designation,
     this.phone,
     this.email,
     required this.role,
@@ -113,6 +117,8 @@ class User {
       fullName: map['full_name'] as String,
       specialization: map['specialization'] as String?,
       licenseNumber: map['license_number'] as String?,
+      degree: map['degree'] as String?,
+      designation: map['designation'] as String?,
       phone: map['phone'] as String?,
       email: map['email'] as String?,
       role: map['role'] as String,
@@ -134,6 +140,8 @@ class User {
       'full_name': fullName,
       'specialization': specialization,
       'license_number': licenseNumber,
+      'degree': degree,
+      'designation': designation,
       'phone': phone,
       'email': email,
       'role': role,
@@ -154,6 +162,8 @@ class User {
     String? fullName,
     String? specialization,
     String? licenseNumber,
+    String? degree,
+    String? designation,
     String? phone,
     String? email,
     String? role,
@@ -172,6 +182,8 @@ class User {
       fullName: fullName ?? this.fullName,
       specialization: specialization ?? this.specialization,
       licenseNumber: licenseNumber ?? this.licenseNumber,
+      degree: degree ?? this.degree,
+      designation: designation ?? this.designation,
       phone: phone ?? this.phone,
       email: email ?? this.email,
       role: role ?? this.role,
@@ -338,6 +350,7 @@ class PatientVisit {
   final String? vitalsPulse;
   final String? vitalsTemp;
   final String? vitalsSaturation;
+  final String? vitalsWeight;
   final String? systemicExamination;
   final String? investigations;
   final String? diagnosis;
@@ -364,6 +377,7 @@ class PatientVisit {
     this.vitalsPulse,
     this.vitalsTemp,
     this.vitalsSaturation,
+    this.vitalsWeight,
     this.systemicExamination,
     this.investigations,
     this.diagnosis,
@@ -392,6 +406,7 @@ class PatientVisit {
       vitalsPulse: map['vitals_pulse'] as String?,
       vitalsTemp: map['vitals_temp'] as String?,
       vitalsSaturation: map['vitals_saturation'] as String?,
+      vitalsWeight: map['vitals_weight'] as String?,
       systemicExamination: map['systemic_examination'] as String?,
       investigations: map['investigations'] as String?,
       diagnosis: map['diagnosis'] as String?,
@@ -420,6 +435,7 @@ class PatientVisit {
       'vitals_pulse': vitalsPulse,
       'vitals_temp': vitalsTemp,
       'vitals_saturation': vitalsSaturation,
+      'vitals_weight': vitalsWeight,
       'systemic_examination': systemicExamination,
       'investigations': investigations,
       'diagnosis': diagnosis,
@@ -447,6 +463,7 @@ class PatientVisit {
     String? vitalsPulse,
     String? vitalsTemp,
     String? vitalsSaturation,
+    String? vitalsWeight,
     String? systemicExamination,
     String? investigations,
     String? diagnosis,
@@ -473,6 +490,7 @@ class PatientVisit {
       vitalsPulse: vitalsPulse ?? this.vitalsPulse,
       vitalsTemp: vitalsTemp ?? this.vitalsTemp,
       vitalsSaturation: vitalsSaturation ?? this.vitalsSaturation,
+      vitalsWeight: vitalsWeight ?? this.vitalsWeight,
       systemicExamination: systemicExamination ?? this.systemicExamination,
       investigations: investigations ?? this.investigations,
       diagnosis: diagnosis ?? this.diagnosis,
@@ -492,6 +510,7 @@ class PatientVisit {
       pulse: vitalsPulse,
       temp: vitalsTemp,
       saturation: vitalsSaturation,
+      weight: vitalsWeight,
       includePlaceholders: includePlaceholders,
     );
   }
@@ -1214,17 +1233,30 @@ class VitalsFormatter {
     return '$cleaned%';
   }
 
+  static String formatWeight(String? weight, {bool includePlaceholder = false}) {
+    if (weight == null || weight.trim().isEmpty) {
+      return includePlaceholder ? '___ kg' : '';
+    }
+    final cleaned = weight.trim();
+    if (cleaned.toLowerCase().contains('kg')) {
+      return cleaned;
+    }
+    return '$cleaned kg';
+  }
+
   static String formatAll({
     String? bp,
     String? pulse,
     String? temp,
     String? saturation,
+    String? weight,
     bool includePlaceholders = true,
   }) {
     final hasAny = (bp?.trim().isNotEmpty == true) ||
         (pulse?.trim().isNotEmpty == true) ||
         (temp?.trim().isNotEmpty == true) ||
-        (saturation?.trim().isNotEmpty == true);
+        (saturation?.trim().isNotEmpty == true) ||
+        (weight?.trim().isNotEmpty == true);
 
     if (!hasAny && !includePlaceholders) {
       return 'None documented';
@@ -1234,12 +1266,14 @@ class VitalsFormatter {
     final formattedPulse = formatPulse(pulse, includePlaceholder: includePlaceholders);
     final formattedTemp = formatTemp(temp, includePlaceholder: includePlaceholders);
     final formattedSat = formatSaturation(saturation, includePlaceholder: includePlaceholders);
+    final formattedWeight = formatWeight(weight, includePlaceholder: includePlaceholders);
 
     final parts = <String>[];
     if (formattedBp.isNotEmpty) parts.add('BP: $formattedBp');
     if (formattedPulse.isNotEmpty) parts.add('Pulse: $formattedPulse');
     if (formattedTemp.isNotEmpty) parts.add('Temp: $formattedTemp');
     if (formattedSat.isNotEmpty) parts.add('SPO2: $formattedSat');
+    if (formattedWeight.isNotEmpty) parts.add('Weight: $formattedWeight');
 
     return parts.join(' | ');
   }

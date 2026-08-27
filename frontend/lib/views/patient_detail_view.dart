@@ -601,7 +601,7 @@ class _VisitCardState extends State<VisitCard> {
                     ClinicalSectionItem(title: 'History', content: v.history!),
                   if (v.pastMedicalHistory != null && v.pastMedicalHistory!.isNotEmpty)
                     ClinicalSectionItem(title: 'Past Medical History', content: v.pastMedicalHistory!),
-                  VitalsPreviewBlock(bp: v.vitalsBp, pulse: v.vitalsPulse, temp: v.vitalsTemp, saturation: v.vitalsSaturation),
+                  VitalsPreviewBlock(bp: v.vitalsBp, pulse: v.vitalsPulse, temp: v.vitalsTemp, saturation: v.vitalsSaturation, weight: v.vitalsWeight),
                   if (v.systemicExamination != null && v.systemicExamination!.isNotEmpty)
                     ClinicalSectionItem(title: 'Systemic Examination', content: v.systemicExamination!),
                   if (v.investigations != null && v.investigations!.isNotEmpty)
@@ -818,6 +818,7 @@ class VitalsPreviewBlock extends StatelessWidget {
   final String? pulse;
   final String? temp;
   final String? saturation;
+  final String? weight;
 
   const VitalsPreviewBlock({
     super.key,
@@ -825,6 +826,7 @@ class VitalsPreviewBlock extends StatelessWidget {
     this.pulse,
     this.temp,
     this.saturation,
+    this.weight,
   });
 
   @override
@@ -833,6 +835,7 @@ class VitalsPreviewBlock extends StatelessWidget {
     final formattedPulse = VitalsFormatter.formatPulse(pulse, includePlaceholder: false);
     final formattedTemp = VitalsFormatter.formatTemp(temp, includePlaceholder: false);
     final formattedSaturation = VitalsFormatter.formatSaturation(saturation, includePlaceholder: false);
+    final formattedWeight = VitalsFormatter.formatWeight(weight, includePlaceholder: false);
 
     return Padding(
       padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
@@ -881,6 +884,12 @@ class VitalsPreviewBlock extends StatelessWidget {
                 label: 'SpO2 Saturation',
                 value: formattedSaturation.isEmpty ? 'N/A' : formattedSaturation,
                 color: Colors.blue.shade700,
+              ),
+              VitalCardItem(
+                icon: Icons.monitor_weight,
+                label: 'Weight',
+                value: formattedWeight.isEmpty ? 'N/A' : formattedWeight,
+                color: Colors.indigo.shade700,
               ),
             ],
           ),

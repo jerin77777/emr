@@ -381,6 +381,9 @@ class DatabaseHelper {
       if (!patientVisitsCols.contains('vitals_saturation')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "vitals_saturation" TEXT;');
       }
+      if (!patientVisitsCols.contains('vitals_weight')) {
+        await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "vitals_weight" TEXT;');
+      }
       if (!patientVisitsCols.contains('systemic_examination')) {
         await db.execute('ALTER TABLE "patient_visits" ADD COLUMN "systemic_examination" TEXT;');
       }
@@ -864,6 +867,7 @@ class DatabaseHelper {
   "vitals_pulse" TEXT,
   "vitals_temp" TEXT,
   "vitals_saturation" TEXT,
+  "vitals_weight" TEXT,
   "systemic_examination" TEXT,
   "investigations" TEXT,
   "diagnosis" TEXT,

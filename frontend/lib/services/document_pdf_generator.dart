@@ -230,7 +230,8 @@ class DocumentPdfGenerator {
             if (VitalsFormatter.formatBp(visit.vitalsBp, includePlaceholder: false).isNotEmpty ||
                 VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false).isNotEmpty ||
                 VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false).isNotEmpty ||
-                VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isNotEmpty) ...[
+                VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isNotEmpty ||
+                VitalsFormatter.formatWeight(visit.vitalsWeight, includePlaceholder: false).isNotEmpty) ...[
               _sectionHeader('VITAL SIGNS & MEASUREMENTS'),
               pw.SizedBox(height: 4),
               pw.Table(
@@ -243,6 +244,7 @@ class DocumentPdfGenerator {
                       _tableHeaderCell('Pulse Rate (bpm)'),
                       _tableHeaderCell('Temperature (°F/°C)'),
                       _tableHeaderCell('Oxygen Saturation (%)'),
+                      _tableHeaderCell('Weight (kg)'),
                     ],
                   ),
                   pw.TableRow(
@@ -251,6 +253,7 @@ class DocumentPdfGenerator {
                       _tableCell(VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(visit.vitalsPulse, includePlaceholder: false)),
                       _tableCell(VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(visit.vitalsTemp, includePlaceholder: false)),
                       _tableCell(VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(visit.vitalsSaturation, includePlaceholder: false)),
+                      _tableCell(VitalsFormatter.formatWeight(visit.vitalsWeight, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatWeight(visit.vitalsWeight, includePlaceholder: false)),
                     ],
                   ),
                 ],
@@ -313,13 +316,13 @@ class DocumentPdfGenerator {
                   children: [
                     if (sigImage != null) ...[
                       pw.Container(
-                        height: 40,
-                        width: 120,
+                        height: 70,
+                        width: 150,
                         child: pw.Image(sigImage, fit: pw.BoxFit.contain),
                       ),
                       pw.SizedBox(height: 4),
                     ] else ...[
-                      pw.SizedBox(height: 40),
+                      pw.SizedBox(height: 70),
                     ],
                     pw.Container(
                       width: 130,
@@ -623,13 +626,13 @@ class DocumentPdfGenerator {
                   children: [
                     if (sigImage != null) ...[
                       pw.Container(
-                        height: 50,
-                        width: 120,
+                        height: 70,
+                        width: 150,
                         child: pw.Image(sigImage, fit: pw.BoxFit.contain),
                       ),
                       pw.SizedBox(height: 4),
                     ] else ...[
-                      pw.SizedBox(height: 50),
+                      pw.SizedBox(height: 70),
                     ],
                     pw.Container(
                       width: 150,

@@ -156,6 +156,7 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
           pulse: record['vitals_pulse'],
           temp: record['vitals_temp'],
           saturation: record['vitals_saturation'],
+          weight: record['vitals_weight'],
           includePlaceholders: true,
         );
 

@@ -83,6 +83,7 @@ String generateConsultationPrintText({
   String? vitalsPulse,
   String? vitalsTemp,
   String? vitalsSaturation,
+  String? vitalsWeight,
   String? systemicExamination,
   String? investigations,
   List<ConsultationDiagnosis>? diagnoses,
@@ -98,6 +99,7 @@ String generateConsultationPrintText({
     pulse: vitalsPulse,
     temp: vitalsTemp,
     saturation: vitalsSaturation,
+    weight: vitalsWeight,
     includePlaceholders: true,
   );
 
@@ -232,6 +234,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
       vitalsPulse: visit.vitalsPulse,
       vitalsTemp: visit.vitalsTemp,
       vitalsSaturation: visit.vitalsSaturation,
+      vitalsWeight: visit.vitalsWeight,
       systemicExamination: visit.systemicExamination,
       investigations: visit.investigations,
       diagnoses: visit.diagnoses,
@@ -284,6 +287,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
       vitalsPulse: record['vitals_pulse']?.toString(),
       vitalsTemp: record['vitals_temp']?.toString(),
       vitalsSaturation: record['vitals_saturation']?.toString(),
+      vitalsWeight: record['vitals_weight']?.toString(),
       systemicExamination: record['systemic_examination']?.toString(),
       investigations: record['investigations']?.toString(),
       diagnosis: record['diagnosis']?.toString(),
@@ -305,6 +309,7 @@ class ConsultationPrintPreviewDialog extends StatefulWidget {
       vitalsPulse: visit.vitalsPulse,
       vitalsTemp: visit.vitalsTemp,
       vitalsSaturation: visit.vitalsSaturation,
+      vitalsWeight: visit.vitalsWeight,
       systemicExamination: visit.systemicExamination,
       investigations: visit.investigations,
       diagnosis: visit.diagnosis,
@@ -684,7 +689,8 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                 if (VitalsFormatter.formatBp(widget.visit.vitalsBp, includePlaceholder: false).isNotEmpty ||
                     VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false).isNotEmpty ||
                     VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isNotEmpty ||
-                    VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isNotEmpty) ...[
+                    VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isNotEmpty ||
+                    VitalsFormatter.formatWeight(widget.visit.vitalsWeight, includePlaceholder: false).isNotEmpty) ...[
                   _previewSectionHeader('VITAL SIGNS & MEASUREMENTS'),
                   const SizedBox(height: 4),
                   Table(
@@ -697,6 +703,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                           _previewTableHeaderCell('Pulse (bpm)'),
                           _previewTableHeaderCell('Temp'),
                           _previewTableHeaderCell('SPO2 (%)'),
+                          _previewTableHeaderCell('Weight (kg)'),
                         ],
                       ),
                       TableRow(
@@ -705,6 +712,7 @@ class _ConsultationPrintPreviewDialogState extends State<ConsultationPrintPrevie
                           _previewTableCell(VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatPulse(widget.visit.vitalsPulse, includePlaceholder: false)),
                           _previewTableCell(VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatTemp(widget.visit.vitalsTemp, includePlaceholder: false)),
                           _previewTableCell(VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatSaturation(widget.visit.vitalsSaturation, includePlaceholder: false)),
+                          _previewTableCell(VitalsFormatter.formatWeight(widget.visit.vitalsWeight, includePlaceholder: false).isEmpty ? 'N/A' : VitalsFormatter.formatWeight(widget.visit.vitalsWeight, includePlaceholder: false)),
                         ],
                       ),
                     ],
