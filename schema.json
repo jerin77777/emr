@@ -87,6 +87,14 @@
           "type": "TEXT"
         },
         {
+          "name": "degree",
+          "type": "TEXT"
+        },
+        {
+          "name": "designation",
+          "type": "TEXT"
+        },
+        {
           "name": "role",
           "type": "TEXT",
           "not_null": true
@@ -274,6 +282,10 @@
         },
         {
           "name": "vitals_saturation",
+          "type": "TEXT"
+        },
+        {
+          "name": "vitals_weight",
           "type": "TEXT"
         },
         {
