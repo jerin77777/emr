@@ -333,7 +333,12 @@ class DocumentPdfGenerator {
                     ),
                     pw.SizedBox(height: 4),
                     if (doctor != null) ...[
-                      pw.Text(doctor.fullName, style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                      pw.Text(
+                        '${doctor.fullName}${doctor.degree != null && doctor.degree!.trim().isNotEmpty ? ", ${doctor.degree}" : ""}',
+                        style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900),
+                      ),
+                      if (doctor.designation != null && doctor.designation!.trim().isNotEmpty)
+                        pw.Text(doctor.designation!, style: pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800, fontWeight: pw.FontWeight.bold)),
                       pw.Text(doctor.specialization ?? 'General Medicine', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800)),
                       if (doctor.licenseNumber != null)
                         pw.Text('License No: ${doctor.licenseNumber!}', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800)),
@@ -643,7 +648,12 @@ class DocumentPdfGenerator {
                     ),
                     pw.SizedBox(height: 4),
                     if (doctor != null) ...[
-                      pw.Text(doctor.fullName, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                      pw.Text(
+                        '${doctor.fullName}${doctor.degree != null && doctor.degree!.trim().isNotEmpty ? ", ${doctor.degree}" : ""}',
+                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900),
+                      ),
+                      if (doctor.designation != null && doctor.designation!.trim().isNotEmpty)
+                        pw.Text(doctor.designation!, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey800, fontWeight: pw.FontWeight.bold)),
                       pw.Text(doctor.specialization ?? 'General Medicine', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
                       if (doctor.licenseNumber != null)
                         pw.Text('License No: ${doctor.licenseNumber!}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),

@@ -1305,7 +1305,10 @@ class _UserManagementTabState extends State<UserManagementTab> {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    'Role: ${user.role} | Specialization: ${user.specialization ?? "N/A"}\nLicense: ${user.licenseNumber ?? "N/A"} | Phone: ${user.phone ?? "N/A"}',
+                    'Role: ${user.role} | Specialization: ${user.specialization ?? "N/A"}'
+                    '${user.degree != null && user.degree!.trim().isNotEmpty ? " | Degree: ${user.degree}" : ""}'
+                    '${user.designation != null && user.designation!.trim().isNotEmpty ? " | Designation: ${user.designation}" : ""}'
+                    '\nLicense: ${user.licenseNumber ?? "N/A"} | Phone: ${user.phone ?? "N/A"}',
                   ),
                   isThreeLine: true,
                   trailing: Row(
@@ -1351,6 +1354,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   late TextEditingController _fullNameController;
   late TextEditingController _specController;
   late TextEditingController _licenseController;
+  late TextEditingController _degreeController;
+  late TextEditingController _designationController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
   String _selectedRole = 'Doctor';
@@ -1380,6 +1385,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
     _fullNameController = TextEditingController(text: u?.fullName ?? '');
     _specController = TextEditingController(text: u?.specialization ?? '');
     _licenseController = TextEditingController(text: u?.licenseNumber ?? '');
+    _degreeController = TextEditingController(text: u?.degree ?? '');
+    _designationController = TextEditingController(text: u?.designation ?? '');
     _phoneController = TextEditingController(text: u?.phone ?? '');
     _emailController = TextEditingController(text: u?.email ?? '');
     if (u != null) {
@@ -1389,6 +1396,20 @@ class _UserFormDialogState extends State<UserFormDialog> {
       _existingSigVersion = u.signatureVersion ?? 1;
     }
     _fetchRoles();
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _fullNameController.dispose();
+    _specController.dispose();
+    _licenseController.dispose();
+    _degreeController.dispose();
+    _designationController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchRoles() async {
@@ -1522,6 +1543,12 @@ class _UserFormDialogState extends State<UserFormDialog> {
       licenseNumber: _licenseController.text.trim().isEmpty
           ? null
           : _licenseController.text.trim(),
+      degree: _degreeController.text.trim().isEmpty
+          ? null
+          : _degreeController.text.trim(),
+      designation: _designationController.text.trim().isEmpty
+          ? null
+          : _designationController.text.trim(),
       phone: _phoneController.text.trim().isEmpty
           ? null
           : _phoneController.text.trim(),
@@ -1621,6 +1648,20 @@ class _UserFormDialogState extends State<UserFormDialog> {
                     labelText: 'License Number (e.g. MED-1234)',
                   ),
                 ),
+                if (_selectedRole.toLowerCase() == 'doctor') ...[
+                  TextFormField(
+                    controller: _degreeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Degree (e.g. MBBS, MD)',
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _designationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Designation (e.g. Consultant)',
+                    ),
+                  ),
+                ],
                 TextFormField(
                   controller: _phoneController,
                   decoration: const InputDecoration(labelText: 'Phone Number'),

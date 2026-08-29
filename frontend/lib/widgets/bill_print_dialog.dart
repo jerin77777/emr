@@ -51,6 +51,8 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
   String? _resolvedSigPath;
   String? _doctorSpec;
   String? _doctorLicense;
+  String? _doctorDegree;
+  String? _doctorDesignation;
 
   @override
   void initState() {
@@ -71,6 +73,8 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
       String? sigPath;
       String? spec;
       String? license;
+      String? degree;
+      String? designation;
       if (widget.bill.visitId != null) {
         final visit = await DatabaseHelper.instance.getPatientVisitById(widget.bill.visitId!);
         if (visit?.doctorId != null) {
@@ -78,6 +82,8 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
           docName = docUser?.fullName;
           spec = docUser?.specialization;
           license = docUser?.licenseNumber;
+          degree = docUser?.degree;
+          designation = docUser?.designation;
           
           if (docUser != null) {
             if (visit.doctorSignatureVersion != null) {
@@ -111,6 +117,8 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
           _resolvedSigPath = sigPath;
           _doctorSpec = spec;
           _doctorLicense = license;
+          _doctorDegree = degree;
+          _doctorDesignation = designation;
         });
       }
     } catch (_) {}
@@ -526,7 +534,12 @@ class _BillPrintPreviewDialogState extends State<BillPrintPreviewDialog> {
                             ),
                             const SizedBox(height: 4),
                             if (_doctorName != null) ...[
-                              Text(_doctorName!, style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.teal.shade900)),
+                              Text(
+                                '${_doctorName!}${_doctorDegree != null && _doctorDegree!.trim().isNotEmpty ? ", $_doctorDegree" : ""}',
+                                style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                              ),
+                              if (_doctorDesignation != null && _doctorDesignation!.trim().isNotEmpty)
+                                Text(_doctorDesignation!, style: TextStyle(fontSize: 7, fontWeight: FontWeight.w500, color: Colors.grey.shade800)),
                               Text(_doctorSpec ?? 'General Medicine', style: TextStyle(fontSize: 7, color: Colors.grey.shade700)),
                               if (_doctorLicense != null)
                                 Text('License No: $_doctorLicense', style: TextStyle(fontSize: 7, color: Colors.grey.shade700)),

@@ -1119,7 +1119,10 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                             ),
                             child: Text(
                               _selectedDoctor != null
-                                  ? '${_selectedDoctor!.fullName} (${_selectedDoctor!.specialization ?? "General Medicine"})'
+                                  ? '${_selectedDoctor!.fullName}'
+                                    '${_selectedDoctor!.degree != null && _selectedDoctor!.degree!.trim().isNotEmpty ? ", ${_selectedDoctor!.degree}" : ""}'
+                                    ' (${_selectedDoctor!.specialization ?? "General Medicine"}'
+                                    '${_selectedDoctor!.designation != null && _selectedDoctor!.designation!.trim().isNotEmpty ? " - ${_selectedDoctor!.designation}" : ""})'
                                   : 'Select Doctor...',
                               style: TextStyle(
                                 fontSize: 14,
@@ -1710,7 +1713,13 @@ class _SearchableDoctorDialogState extends State<_SearchableDoctorDialog> {
         final name = doc.fullName.toLowerCase();
         final spec = (doc.specialization ?? '').toLowerCase();
         final license = (doc.licenseNumber ?? '').toLowerCase();
-        return name.contains(query) || spec.contains(query) || license.contains(query);
+        final deg = (doc.degree ?? '').toLowerCase();
+        final desig = (doc.designation ?? '').toLowerCase();
+        return name.contains(query) ||
+            spec.contains(query) ||
+            license.contains(query) ||
+            deg.contains(query) ||
+            desig.contains(query);
       }).toList();
     });
   }
@@ -1745,8 +1754,16 @@ class _SearchableDoctorDialogState extends State<_SearchableDoctorDialog> {
                           selected: isSelected,
                           selectedColor: Colors.teal.shade800,
                           selectedTileColor: Colors.teal.shade50,
-                          title: Text(doc.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('${doc.specialization ?? "General Medicine"} | License: ${doc.licenseNumber ?? "N/A"}'),
+                          title: Text(
+                            '${doc.fullName}'
+                            '${doc.degree != null && doc.degree!.trim().isNotEmpty ? ", ${doc.degree}" : ""}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            '${doc.specialization ?? "General Medicine"}'
+                            '${doc.designation != null && doc.designation!.trim().isNotEmpty ? " - ${doc.designation}" : ""}'
+                            ' | License: ${doc.licenseNumber ?? "N/A"}'
+                          ),
                           trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.teal) : null,
                           onTap: () => Navigator.pop(context, doc),
                         );

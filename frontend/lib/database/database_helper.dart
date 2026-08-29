@@ -154,6 +154,12 @@ class DatabaseHelper {
       if (!usersCols.contains('license_number')) {
         await db.execute('ALTER TABLE "users" ADD COLUMN "license_number" TEXT;');
       }
+      if (!usersCols.contains('degree')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "degree" TEXT;');
+      }
+      if (!usersCols.contains('designation')) {
+        await db.execute('ALTER TABLE "users" ADD COLUMN "designation" TEXT;');
+      }
       if (!usersCols.contains('phone')) {
         await db.execute('ALTER TABLE "users" ADD COLUMN "phone" TEXT;');
       }
@@ -816,6 +822,8 @@ class DatabaseHelper {
   "full_name" TEXT NOT NULL,
   "specialization" TEXT,
   "license_number" TEXT,
+  "degree" TEXT,
+  "designation" TEXT,
   "phone" TEXT,
   "email" TEXT,
   "role" TEXT NOT NULL,

@@ -32,4 +32,36 @@ void main() {
     );
     expect(formatted, 'BP: ___ mmHg | Pulse: ___ bpm | Temp: ___ °C/°F | SPO2: ___ % | Weight: ___ kg');
   });
+
+  test('User model handles degree and designation correctly', () {
+    const user = User(
+      userUuid: 'test-uuid',
+      username: 'test-doctor',
+      passwordHash: 'hashed-pwd',
+      fullName: 'Dr. Test Doctor',
+      role: 'Doctor',
+      degree: 'MBBS, MD',
+      designation: 'Senior Consultant',
+    );
+
+    // Verify properties
+    expect(user.degree, 'MBBS, MD');
+    expect(user.designation, 'Senior Consultant');
+
+    // Serialization (toMap)
+    final map = user.toMap();
+    expect(map['degree'], 'MBBS, MD');
+    expect(map['designation'], 'Senior Consultant');
+
+    // Deserialization (fromMap)
+    final fromMapUser = User.fromMap(map);
+    expect(fromMapUser.degree, 'MBBS, MD');
+    expect(fromMapUser.designation, 'Senior Consultant');
+
+    // copyWith
+    final updatedUser = user.copyWith(degree: 'FRCS', designation: 'Chief Medical Director');
+    expect(updatedUser.degree, 'FRCS');
+    expect(updatedUser.designation, 'Chief Medical Director');
+    expect(updatedUser.fullName, 'Dr. Test Doctor'); // Unchanged fields remain
+  });
 }
