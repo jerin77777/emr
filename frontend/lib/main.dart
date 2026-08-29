@@ -106,6 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController(text: 'admin');
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
   @override
@@ -620,7 +621,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final matchedUser = users.firstWhere(
         (u) =>
-            u.username == username &&
+            u.username.toLowerCase() == username.toLowerCase() &&
             CryptoHelper.verifyPassword(password, u.passwordHash) &&
             u.isActive == 1,
         orElse: () => const User(
@@ -762,11 +763,23 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
                           labelText: 'Password',
-                          prefixIcon: Icon(Icons.lock),
-                          border: OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.lock),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                          border: const OutlineInputBorder(),
                         ),
                         validator: (value) =>
                             value!.isEmpty ? 'Enter password' : null,
