@@ -143,4 +143,26 @@ class DateFormatter {
   static String getBillEditStatusText(String? billDateStr) {
     return getEditStatusText(billDateStr);
   }
+
+  /// Checks if a consultation visit is within the allowable 3-day deletion window.
+  static bool isVisitDeletable(String? visitDateStr, [String? createdAtStr]) {
+    if (visitDateStr == null && createdAtStr == null) return false;
+    final dt = parse(visitDateStr) ?? parse(createdAtStr);
+    if (dt == null) return false;
+    final now = DateTime.now();
+    // Allow deletion up to 3 full calendar days from the visit date (until 00:00 of the 4th day)
+    final deletionCutoff = DateTime(dt.year, dt.month, dt.day + 4, 0, 0);
+    return now.isBefore(deletionCutoff);
+  }
+
+  /// Checks if a patient record is within the allowable 3-day deletion window.
+  static bool isPatientDeletable(String? registrationDateStr, [String? createdAtStr]) {
+    if (registrationDateStr == null && createdAtStr == null) return false;
+    final dt = parse(registrationDateStr) ?? parse(createdAtStr);
+    if (dt == null) return false;
+    final now = DateTime.now();
+    // Allow deletion up to 3 full calendar days from registration date (until 00:00 of the 4th day)
+    final deletionCutoff = DateTime(dt.year, dt.month, dt.day + 4, 0, 0);
+    return now.isBefore(deletionCutoff);
+  }
 }

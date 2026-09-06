@@ -917,8 +917,8 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
             const Text('Delete Consultation Visit'),
           ],
         ),
-        content: Text(
-          'Are you sure you want to delete Consultation Visit #${widget.existingVisit!.visitNumber ?? ""} (${DateFormatter.formatDate(widget.existingVisit!.visitDate)})?',
+        content: const Text(
+          'Are you sure you want to delete this consultation? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -939,7 +939,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
 
     if (confirm == true) {
       try {
-        await DatabaseHelper.instance.deletePatientVisit(widget.existingVisit!.id!);
+        await DatabaseHelper.instance.deletePatientVisit(widget.existingVisit!.id!, user: widget.currentUser);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -963,6 +963,8 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
   Widget build(BuildContext context) {
     final p = widget.patient;
     final isEdit = widget.existingVisit != null;
+    final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
+    final isDeletable = isEdit && isAdmin && DateFormatter.isVisitDeletable(widget.existingVisit!.visitDate, widget.existingVisit!.createdAt);
 
     return Scaffold(
       appBar: AppBar(
@@ -1013,7 +1015,7 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          if (isEdit) ...[
+          if (isDeletable) ...[
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.white70),
@@ -1309,7 +1311,6 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                                           final option = options.elementAt(index);
                                           final code = option['code'] ?? '';
                                           final nameEn = option['name_en'] ?? '';
-                                          final nameId = option['name_id'] ?? '';
                                           return ListTile(
                                             title: RichText(
                                               text: TextSpan(
@@ -1328,15 +1329,6 @@ class _ClinicalConsultationViewState extends State<ClinicalConsultationView> {
                                                 ],
                                               ),
                                             ),
-                                            subtitle: nameId.trim().isNotEmpty
-                                                ? Text(
-                                                    nameId,
-                                                    style: TextStyle(
-                                                      color: Colors.grey.shade600,
-                                                      fontSize: 12,
-                                                    ),
-                                                  )
-                                                : null,
                                             onTap: () => onSelected(option),
                                           );
                                         },

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
 import '../config.dart';
+import '../utils/date_formatter.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -1199,8 +1200,22 @@ class DatabaseHelper {
     return await db.update('patients', patient.toMap(), where: 'id = ?', whereArgs: [patient.id]);
   }
 
-  Future<int> deletePatient(int id) async {
+  Future<int> deletePatient(int id, {User? user}) async {
     final db = await instance.database;
+    if (user != null && user.role.toLowerCase() != 'admin') {
+      throw Exception('Unauthorized: Only Admin users can delete patient records.');
+    }
+    final patientRows = await db.query('patients', where: 'id = ?', whereArgs: [id]);
+    String? patientCode;
+    if (patientRows.isNotEmpty) {
+      final pMap = patientRows.first;
+      patientCode = pMap['patient_code'] as String?;
+      final regDate = pMap['registration_date'] as String?;
+      final updatedAt = pMap['updated_at'] as String?;
+      if (!DateFormatter.isPatientDeletable(regDate, updatedAt)) {
+        throw Exception('Deletion window expired: Patient records can only be deleted within 3 days of registration.');
+      }
+    }
     // Clean up associated records
     final visits = await db.query('patient_visits', columns: ['id'], where: 'patient_id = ?', whereArgs: [id]);
     for (final v in visits) {
@@ -1218,6 +1233,19 @@ class DatabaseHelper {
 
     await db.delete('investigation_reports', where: 'patient_id = ?', whereArgs: [id]);
     final result = await db.delete('patients', where: 'id = ?', whereArgs: [id]);
+
+    if (user != null) {
+      try {
+        await insertAuditLog(
+          AuditLog(
+            userId: user.id,
+            action: 'Delete Patient Record',
+            details: 'Admin user ${user.username} deleted Patient ID $id (${patientCode ?? "N/A"})',
+          ),
+        );
+      } catch (_) {}
+    }
+
     notifyDatabaseChanged();
     return result;
   }
@@ -1289,11 +1317,38 @@ class DatabaseHelper {
     return rows;
   }
 
-  Future<int> deletePatientVisit(int id) async {
+  Future<int> deletePatientVisit(int id, {User? user}) async {
     final db = await instance.database;
+    if (user != null && user.role.toLowerCase() != 'admin') {
+      throw Exception('Unauthorized: Only Admin users can delete consultation records.');
+    }
+    final visitRows = await db.query('patient_visits', where: 'id = ?', whereArgs: [id]);
+    int? visitNumber;
+    if (visitRows.isNotEmpty) {
+      final visitMap = visitRows.first;
+      visitNumber = (visitMap['visit_number'] as num?)?.toInt();
+      final visitDate = visitMap['visit_date'] as String?;
+      final createdAt = visitMap['created_at'] as String?;
+      if (!DateFormatter.isVisitDeletable(visitDate, createdAt)) {
+        throw Exception('Deletion window expired: Consultations can only be deleted within 3 days of the visit date.');
+      }
+    }
     await db.delete('consultation_diagnoses', where: 'visit_id = ?', whereArgs: [id]);
     await db.update('bills', {'visit_id': null}, where: 'visit_id = ?', whereArgs: [id]);
     final result = await db.delete('patient_visits', where: 'id = ?', whereArgs: [id]);
+
+    if (user != null) {
+      try {
+        await insertAuditLog(
+          AuditLog(
+            userId: user.id,
+            action: 'Delete Consultation Visit',
+            details: 'Admin user ${user.username} deleted Consultation Visit ID $id (#${visitNumber ?? ""})',
+          ),
+        );
+      } catch (_) {}
+    }
+
     notifyDatabaseChanged();
     return result;
   }

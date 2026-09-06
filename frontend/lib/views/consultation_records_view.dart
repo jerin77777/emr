@@ -311,7 +311,6 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
   Future<void> _confirmDeleteConsultation(Map<String, dynamic> record) async {
     final visitId = (record['id'] as num?)?.toInt();
     final visitNumber = record['visit_number'] ?? '';
-    final patientName = record['patient_name'] ?? 'Patient';
     if (visitId == null) return;
 
     final confirm = await showDialog<bool>(
@@ -324,8 +323,8 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
             const Text('Delete Consultation Visit'),
           ],
         ),
-        content: Text(
-          'Are you sure you want to delete Consultation Visit #$visitNumber for "$patientName"?',
+        content: const Text(
+          'Are you sure you want to delete this consultation? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -346,7 +345,7 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
 
     if (confirm == true) {
       try {
-        await DatabaseHelper.instance.deletePatientVisit(visitId);
+        await DatabaseHelper.instance.deletePatientVisit(visitId, user: widget.currentUser);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -942,6 +941,8 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
                                                           rec['visit_date'],
                                                           rec['created_at'],
                                                         );
+                                                    final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
+                                                    final isDeletable = isAdmin && DateFormatter.isVisitDeletable(rec['visit_date'], rec['created_at']);
                                                     return PopupMenuButton<
                                                       String
                                                     >(
@@ -1033,34 +1034,36 @@ class _ConsultationRecordsViewState extends State<ConsultationRecordsView> {
                                                             ],
                                                           ),
                                                         ),
-                                                        const PopupMenuDivider(),
-                                                        const PopupMenuItem(
-                                                          value: 'delete',
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons
-                                                                    .delete_outline,
-                                                                size: 18,
-                                                                color:
-                                                                    Colors.red,
-                                                              ),
-                                                              SizedBox(
-                                                                width: 8,
-                                                              ),
-                                                              Text(
-                                                                'Delete Visit',
-                                                                style: TextStyle(
-                                                                  color: Colors
-                                                                      .red,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500,
+                                                        if (isDeletable) ...[
+                                                          const PopupMenuDivider(),
+                                                          const PopupMenuItem(
+                                                            value: 'delete',
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons
+                                                                      .delete_outline,
+                                                                  size: 18,
+                                                                  color:
+                                                                      Colors.red,
                                                                 ),
-                                                              ),
-                                                            ],
+                                                                SizedBox(
+                                                                  width: 8,
+                                                                ),
+                                                                Text(
+                                                                  'Delete Visit',
+                                                                  style: TextStyle(
+                                                                    color: Colors
+                                                                        .red,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
                                                           ),
-                                                        ),
+                                                        ],
                                                       ],
                                                     );
                                                   },

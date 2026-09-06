@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../utils/date_formatter.dart';
 import 'patient_registration_dialog.dart';
 import 'patient_detail_view.dart';
 import 'clinical_consultation_view.dart';
@@ -76,8 +77,8 @@ class _PatientManagementViewState extends State<PatientManagementView> {
             const Text('Delete Patient Record'),
           ],
         ),
-        content: Text(
-          'Are you sure you want to permanently delete "${p.fullName}" (ID: ${p.patientCode})?\n\nThis will permanently remove the patient and all associated consultations, invoices, and medical records.',
+        content: const Text(
+          'Are you sure you want to delete this patient record? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -98,7 +99,7 @@ class _PatientManagementViewState extends State<PatientManagementView> {
 
     if (confirm == true && p.id != null) {
       try {
-        await DatabaseHelper.instance.deletePatient(p.id!);
+        await DatabaseHelper.instance.deletePatient(p.id!, user: widget.currentUser);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -309,6 +310,8 @@ class _PatientManagementViewState extends State<PatientManagementView> {
                     itemCount: patients.length,
                     itemBuilder: (context, index) {
                       final p = patients[index];
+                      final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
+                      final isDeletable = isAdmin && DateFormatter.isPatientDeletable(p.registrationDate, p.updatedAt);
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         elevation: 2,
@@ -422,15 +425,17 @@ class _PatientManagementViewState extends State<PatientManagementView> {
                                       onPressed: () =>
                                           _showRegistrationDialog(p),
                                     ),
-                                    const SizedBox(width: 4),
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.delete_outline,
-                                        color: Colors.red.shade400,
+                                    if (isDeletable) ...[
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red.shade400,
+                                        ),
+                                        tooltip: 'Delete Patient Record',
+                                        onPressed: () => _deletePatient(p),
                                       ),
-                                      tooltip: 'Delete Patient Record',
-                                      onPressed: () => _deletePatient(p),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ],

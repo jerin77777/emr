@@ -99,8 +99,8 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
             const Text('Delete Patient Record'),
           ],
         ),
-        content: Text(
-          'Are you sure you want to permanently delete "${p.fullName}" (ID: ${p.patientCode})?\n\nThis will permanently delete this patient and all their clinical visits, invoices, and documents.',
+        content: const Text(
+          'Are you sure you want to delete this patient record? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -121,7 +121,7 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
 
     if (confirm == true && p.id != null) {
       try {
-        await DatabaseHelper.instance.deletePatient(p.id!);
+        await DatabaseHelper.instance.deletePatient(p.id!, user: widget.currentUser);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -144,6 +144,8 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
   @override
   Widget build(BuildContext context) {
     final p = widget.patient;
+    final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
+    final isDeletable = isAdmin && DateFormatter.isPatientDeletable(p.registrationDate, p.updatedAt);
 
     return Scaffold(
       appBar: AppBar(
@@ -173,11 +175,13 @@ class _PatientDetailViewState extends State<PatientDetailView> with SingleTicker
             label: const Text('Generate Bill'),
           ),
           const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.white70),
-            tooltip: 'Delete Patient Record',
-            onPressed: _confirmDeletePatient,
-          ),
+          if (isDeletable) ...[
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.white70),
+              tooltip: 'Delete Patient Record',
+              onPressed: _confirmDeletePatient,
+            ),
+          ],
           const SizedBox(width: 12),
         ],
       ),
@@ -456,8 +460,8 @@ class _VisitCardState extends State<VisitCard> {
             const Text('Delete Consultation Visit'),
           ],
         ),
-        content: Text(
-          'Are you sure you want to delete Consultation Visit #${v.visitNumber ?? widget.index} (${DateFormatter.formatDate(v.visitDate)})?',
+        content: const Text(
+          'Are you sure you want to delete this consultation? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -478,7 +482,7 @@ class _VisitCardState extends State<VisitCard> {
 
     if (confirm == true && v.id != null) {
       try {
-        await DatabaseHelper.instance.deletePatientVisit(v.id!);
+        await DatabaseHelper.instance.deletePatientVisit(v.id!, user: widget.currentUser);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -514,6 +518,9 @@ class _VisitCardState extends State<VisitCard> {
     final vitalsText = v.formattedVitals(includePlaceholders: true);
     final isEditable = DateFormatter.isVisitEditable(v.visitDate, v.createdAt);
     final editStatus = DateFormatter.getEditStatusText(v.visitDate, v.createdAt);
+
+    final isAdmin = widget.currentUser.role.toLowerCase() == 'admin';
+    final isDeletable = isAdmin && DateFormatter.isVisitDeletable(v.visitDate, v.createdAt);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -579,11 +586,12 @@ class _VisitCardState extends State<VisitCard> {
                       : 'Edit window closed ($editStatus)',
                   onPressed: isEditable ? _openEditConsultation : null,
                 ),
-                IconButton(
-                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
-                  tooltip: 'Delete Visit',
-                  onPressed: _confirmDeleteVisit,
-                ),
+                if (isDeletable)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                    tooltip: 'Delete Visit',
+                    onPressed: _confirmDeleteVisit,
+                  ),
                 Icon(_expanded ? Icons.expand_less : Icons.expand_more),
               ],
             ),
